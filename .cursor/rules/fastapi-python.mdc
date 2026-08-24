@@ -1,0 +1,38 @@
+---
+description: FastAPI + Python constraints for ProjectX API, WebSockets, and workers
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# FastAPI + Python
+
+Applies under `backend/` and `workers/`.
+
+## MUST
+
+- Single FastAPI app as the HTTP/WS gateway: routers, Pydantic validation, exception handlers, CORS from config.
+- Native FastAPI WebSockets only. Support `event:new_post`, `event:trend_spike`, `event:graph_delta` plus analyst filters (topic, time window, severity).
+- Confirmed REST paths only as product APIs. Extra routes (e.g. health) must be documented as implementation, not "confirmed."
+- Config via environment variables; never hard-code secrets. Ship `.env.example` with empty placeholders.
+- Telegram: Telethon / MTProto public-channel ingestion. X: adapter interface — do not freeze `ntscraper` vs official API unless the repo or user already chose.
+- Publish normalized raw posts to Redis Streams `stream:social:raw`. Consumers must reject malformed payloads without silent drop.
+- Persistence: MongoDB `posts` shape and Neo4j `(:User)`, `(:Topic)`, `(:User)-[:INTERACTED]->(:User)` from `cursor.md`.
+- Failures at I/O boundaries: log, surface, or retry as designed — never swallow or fake success.
+
+## MUST NOT
+
+- Express, Socket.io, or a Node process for API/realtime.
+- A different emotion model or polarity taxonomy.
+- Committing API keys, Telegram strings, or Mongo/Neo4j passwords.
+
+```python
+# BAD
+@app.get("/timeline")
+def timeline():
+    return mongo.find()  # unvalidated, unversioned
+
+# GOOD
+@router.get("/api/v1/analytics/timeline")
+async def timeline(params: TimelineQuery, db: MongoDep) -> TimelineResponse:
+    ...
+```

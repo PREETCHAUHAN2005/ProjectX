@@ -1,0 +1,10 @@
+# Optional ML stack for live GoEmotions / BERTopic / spaCy.
+# Not required for unit tests. Install only when running the inference worker
+# against SamLowe/roberta-base-go_emotions.
+#
+#   pip install -r workers/requirements-ml.txt
+#
+transformers>=4.44.0
+torch>=2.4.0
+bertopic>=0.16.0
+spacy>=3.7.0

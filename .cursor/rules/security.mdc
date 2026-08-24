@@ -1,0 +1,32 @@
+---
+description: Security constraints — secrets, validation, auth gap, safe errors
+alwaysApply: true
+---
+
+# Security
+
+Dashboard login/JWT/RBAC was **not specified**. Do not present a chosen auth scheme as an original product feature. The source *does* require addressing API auth and rate limiting before production exposure (`CHG-016`).
+
+## MUST
+
+- Keep secrets out of git. Use env vars; `.env` is gitignored; `.env.example` has names only.
+- Validate all external payloads (social APIs, Redis messages, WS client frames, REST query params) before process or persist.
+- Return safe client errors (no stack traces, no connection strings, no tokens).
+- Sanitize text rendered in the dashboard (XSS). Parameterize Mongo/Neo4j queries (no string-built Cypher).
+- Treat Telethon / X / Hugging Face credentials as secret. Do not log raw tokens or full raw posts if they contain credentials.
+- Before calling the system production-ready: review auth, rate limits, secrets, injection, XSS, SSRF (if workers fetch URLs), and data exposure — or explicitly block ship.
+
+## MUST NOT
+
+- Invent "the product requires OAuth/JWT" as a confirmed NTRO/SIH requirement.
+- Disable auth in a way that can leak into production without an explicit env flag.
+- Use user-controlled URLs/hosts in server-side fetches without allowlisting (SSRF).
+- Commit `.env`, key files, or scraped session strings.
+
+```python
+# BAD
+return JSONResponse({"error": traceback.format_exc(), "mongo": MONGO_URI})
+
+# GOOD
+raise HTTPException(status_code=400, detail="Invalid request")
+```

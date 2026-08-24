@@ -1,0 +1,36 @@
+---
+description: React + TypeScript dashboard constraints for ProjectX frontend
+globs: frontend/**/*.{ts,tsx,css}
+alwaysApply: false
+---
+
+# React + TypeScript
+
+Applies when working under `frontend/`.
+
+## MUST
+
+- Functional components. TypeScript strict; no `any` as a shortcut.
+- Tailwind-compatible styling. Do not add a second CSS framework.
+- Typed API client + typed WebSocket client matching backend contracts (`data-contract-review`).
+- Timeline: Recharts (area/line, sentiment polarity, time-window control).
+- Network: `react-force-graph-2d` (nodes/links, PageRank-scaled size, community color).
+- Demographics: choropleth + profession donut; data from `GET /api/v1/analytics/demographics`.
+- Live feed: `event:new_post`; bounded list; malformed events must not crash the UI.
+- Analyst filters: topic, time window, severity — dispatch WS criteria, then re-render from backend data.
+- Loading, empty, and error states on every widget.
+- Wire widgets to real REST/WS once those exist. No disconnected mock dashboards as the product.
+
+## MUST NOT
+
+- Extra global state libraries unless the UI cannot work without them.
+- Socket.io client. Use the native WebSocket client against FastAPI.
+- Treating optional archive/demo JSON as the primary data path.
+
+```tsx
+// BAD
+const data: any = await fetch(url).then((r) => r.json());
+
+// GOOD
+const data: TimelineResponse = await api.getTimeline(params);
+```

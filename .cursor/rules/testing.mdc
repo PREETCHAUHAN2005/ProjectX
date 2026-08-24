@@ -1,0 +1,32 @@
+---
+description: Testing requirements for polarity, APIs, WebSockets, UI states, and E2E
+alwaysApply: true
+---
+
+# Testing
+
+Tests must prove behavior, not pad coverage. Never claim a check passed if it was not run.
+
+## MUST
+
+- Backend: polarity mapping, trend-spike rule (`velocity > 2.5` and `sample size > 50`), REST handlers, Pydantic validation, WebSocket connect/event/malformed-frame, persistence integration when stores are available.
+- Frontend: widget render, filter interactions, API client mapping, WS-driven updates, loading/empty/error.
+- E2E path when claiming Phase-1 done: ingest → `stream:social:raw` → inference → Mongo/Neo4j → REST and/or WS → dashboard.
+- Typecheck the frontend and run the backend test runner for touched areas before calling a feature complete.
+- Isolate unspecified contract fields behind fixtures/fakes that match the documented internal schema.
+
+## MUST NOT
+
+- Skip error-path tests at I/O boundaries (social API, Redis, model, DB, WS disconnect).
+- Assert on invented JSON fields as if they were source-confirmed.
+- Use production credentials in tests; use fakes or local/test env.
+
+```python
+# BAD
+def test_spike():
+    assert detect_spike(velocity=3, n=10)  # ignores sample-size rule
+
+# GOOD
+assert detect_spike(velocity=3.0, sample_size=51) is True
+assert detect_spike(velocity=3.0, sample_size=50) is False
+```

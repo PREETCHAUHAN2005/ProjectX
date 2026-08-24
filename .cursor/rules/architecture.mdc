@@ -1,0 +1,42 @@
+---
+description: ProjectX architecture — stack, layout, data flow, and what must not be invented
+alwaysApply: true
+---
+
+# Architecture
+
+Target layout (repo was empty; use this unless the repo already differs):
+
+```text
+frontend/     # React + TypeScript dashboard
+backend/      # FastAPI REST + native WebSockets
+workers/      # ingestion + AI inference (Python)
+```
+
+## MUST
+
+- Preserve: sources → ingestion workers → Redis Streams `stream:social:raw` → AI pipeline → MongoDB + Neo4j → FastAPI REST/WS → React dashboard.
+- Frontend: React + TypeScript. Backend gateway: FastAPI + native WebSockets only.
+- Phase-1 sources: Telegram (Telethon) + X (adapter; choice unresolved).
+- Emotion model: `SamLowe/roberta-base-go_emotions`. Polarity: `POSITIVE | NEGATIVE | NEUTRAL`.
+- Trend spike only when `velocity > 2.5` AND `sample size > 50`.
+- Keep ingestion, inference, persistence, API, and UI logically separated.
+- Confirmed REST: `GET /api/v1/analytics/timeline`, `GET /api/v1/analytics/network-graph`, `GET /api/v1/analytics/demographics`, `GET /api/v1/topics/trending`.
+- Confirmed WS events: `event:new_post`, `event:trend_spike`, `event:graph_delta`.
+- Document every implementation choice that is not in `cursor.md` / `changes.md`.
+
+## MUST NOT
+
+- Node.js / Express / Socket.io as the gateway (even if old diagrams show it).
+- Reddit ingestion in Phase 1. Instagram / Facebook / YouTube unless explicitly requested.
+- Extra databases, auth products, or cloud platforms presented as confirmed architecture.
+- Inventing query params, JSON envelopes, WS payloads, or auth as "source-confirmed."
+- Extra Neo4j relationship types without documenting them as a gap.
+
+```text
+# BAD — second gateway
+Node Express + Socket.io  →  React
+
+# GOOD
+workers → Redis → inference → Mongo/Neo4j → FastAPI REST+WS → React
+```
