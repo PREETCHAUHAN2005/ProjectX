@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { DemographicsPanel } from './components/DemographicsPanel'
 import { EmotionModelPanel } from './components/EmotionModelPanel'
 import { LiveFeed } from './components/LiveFeed'
 import { MetricStrip } from './components/MetricStrip'
 import { NetworkCanvas } from './components/NetworkCanvas'
+import { Sidebar, type SidebarSection } from './components/Sidebar'
 import { TimelineChart } from './components/TimelineChart'
 import { TrendingList } from './components/TrendingList'
 import { WidgetPanel } from './components/WidgetPanel'
@@ -29,33 +31,47 @@ function StatusChip({
 
 export default function App() {
   const dashboard = useDashboard()
+  const [section, setSection] = useState<SidebarSection>('overview')
   const field =
     'mt-1 w-full rounded-xl border border-line bg-canvas px-3 py-2 text-[13px] text-ink outline-none focus:border-ink'
+
+  function goTo(id: SidebarSection): void {
+    setSection(id)
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
     <div className="min-h-svh bg-canvas text-ink">
       <div className="flex min-h-svh">
-        <aside className="hidden w-[248px] shrink-0 border-r border-line bg-surface px-5 py-6 lg:block">
-          <p className="font-serif text-[28px] leading-none">ProjectX</p>
-          <p className="mt-1 text-[12px] text-muted">Social intelligence</p>
-          <nav className="mt-10 space-y-1 text-[13px]">
-            {['Overview', 'Timeline', 'Network', 'Demographics', 'Live feed'].map(
-              (item, index) => (
-                <div
-                  key={item}
-                  className={`rounded-xl px-3 py-2 ${index === 0 ? 'bg-canvas font-medium' : 'text-muted'}`}
-                >
-                  {item}
-                </div>
-              ),
-            )}
-          </nav>
-          <div className="mt-10 rounded-2xl bg-canvas px-3 py-3 text-[12px] text-muted">
-            Colab model attaches through VITE_MODEL_URL. The console stays usable without it.
-          </div>
-        </aside>
+        <Sidebar
+          active={section}
+          onNavigate={goTo}
+          dataMode={dashboard.dataMode}
+          apiStatus={dashboard.apiStatus}
+          wsStatus={dashboard.wsStatus}
+          volume={dashboard.metrics.volume}
+          topicCount={dashboard.metrics.topics}
+          preferPrototype={dashboard.preferPrototype}
+          onTogglePreview={() => {
+            dashboard.setPreferPrototype(!dashboard.preferPrototype)
+          }}
+        />
 
         <div className="min-w-0 flex-1">
+          <div className="flex gap-2 overflow-x-auto border-b border-line bg-surface px-4 py-2 md:hidden">
+            {['overview', 'timeline', 'live', 'model'].map((id) => (
+              <button
+                key={id}
+                type="button"
+                className="shrink-0 rounded-full border border-line px-3 py-1 text-[12px] capitalize"
+                onClick={() => {
+                  goTo(id as SidebarSection)
+                }}
+              >
+                {id}
+              </button>
+            ))}
+          </div>
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4 lg:px-8">
             <div>
               <p className="text-[11px] font-medium tracking-[0.14em] text-muted uppercase">
@@ -101,7 +117,8 @@ export default function App() {
 
           <div className="space-y-5 px-5 py-5 lg:px-8">
             <form
-              className="grid gap-3 rounded-2xl border border-line bg-surface p-4 md:grid-cols-4"
+              id="overview"
+              className="scroll-mt-4 grid gap-3 rounded-2xl border border-line bg-surface p-4 md:grid-cols-4"
               onSubmit={(event) => {
                 event.preventDefault()
                 void dashboard.reload()
@@ -187,6 +204,7 @@ export default function App() {
             />
 
             <div className="grid gap-4 xl:grid-cols-2">
+              <div id="timeline" className="scroll-mt-4">
               <WidgetPanel
                 title="Timeline"
                 description="Volume and polarity"
@@ -196,6 +214,8 @@ export default function App() {
                   <TimelineChart data={dashboard.timeline.data} />
                 ) : null}
               </WidgetPanel>
+              </div>
+              <div id="network" className="scroll-mt-4">
               <WidgetPanel
                 title="Network"
                 description="PageRank-scaled influence"
@@ -205,6 +225,8 @@ export default function App() {
                   <NetworkCanvas data={dashboard.graph.data} />
                 ) : null}
               </WidgetPanel>
+              </div>
+              <div id="demographics" className="scroll-mt-4">
               <WidgetPanel
                 title="Demographics"
                 description="Country density, profession, language"
@@ -214,6 +236,8 @@ export default function App() {
                   <DemographicsPanel data={dashboard.demographics.data} />
                 ) : null}
               </WidgetPanel>
+              </div>
+              <div id="trending" className="scroll-mt-4">
               <WidgetPanel
                 title="Trending"
                 description="Velocity ranked topics"
@@ -228,12 +252,19 @@ export default function App() {
                   />
                 ) : null}
               </WidgetPanel>
-              <section className="rounded-2xl border border-line bg-surface p-5">
+              </div>
+              <section
+                id="live"
+                className="scroll-mt-4 rounded-2xl border border-line bg-surface p-5"
+              >
                 <h2 className="mb-1 text-[13px] font-semibold">Live feed</h2>
                 <p className="mb-3 text-[12px] text-muted">event:new_post · capped at 50</p>
                 <LiveFeed posts={dashboard.feed} />
               </section>
-              <section className="rounded-2xl border border-line bg-surface p-5">
+              <section
+                id="model"
+                className="scroll-mt-4 rounded-2xl border border-line bg-surface p-5"
+              >
                 <h2 className="mb-1 text-[13px] font-semibold">Emotion model</h2>
                 <p className="mb-3 text-[12px] text-muted">
                   Slot for the Colab GoEmotions export
