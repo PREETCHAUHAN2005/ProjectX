@@ -9,6 +9,8 @@ import {
   YAxis,
 } from 'recharts'
 import type { TimelineResponse } from '../types/contracts'
+import { useChartColors } from '../lib/theme'
+import { ChartTooltip } from './ChartTooltip'
 
 function tickLabel(value: string): string {
   const stamp = Date.parse(value)
@@ -22,36 +24,8 @@ function tickLabel(value: string): string {
   })
 }
 
-function ChartTip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: Array<{ name: string; value: number; color: string }>
-  label?: string
-}) {
-  if (!active || !payload?.length) {
-    return null
-  }
-  return (
-    <div className="rounded-xl border border-line bg-surface px-3 py-2 text-xs shadow-sm text-ink">
-      <p className="mb-1 text-muted">{label}</p>
-      {payload.map((item) => (
-        <p key={item.name} className="tabular text-ink">
-          <span
-            className="mr-2 inline-block h-2 w-2 rounded-full"
-            style={{ background: item.color }}
-          />
-          {item.name}:{' '}
-          {typeof item.value === 'number' ? item.value.toFixed(item.name === 'Polarity' ? 2 : 0) : item.value}
-        </p>
-      ))}
-    </div>
-  )
-}
-
 export function TimelineChart({ data }: { data: TimelineResponse }) {
+  const colors = useChartColors()
   const rows = data.buckets.map((bucket) => ({
     label: tickLabel(bucket.timestamp),
     Posts: bucket.post_count ?? 0,
@@ -63,38 +37,50 @@ export function TimelineChart({ data }: { data: TimelineResponse }) {
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="#eee7de" strokeDasharray="3 6" vertical={false} />
+          <CartesianGrid stroke={colors.grid} strokeDasharray="3 6" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 11, fill: '#64748b' }}
+            tick={{ fontSize: 11, fill: colors.tick }}
             axisLine={false}
             tickLine={false}
             minTickGap={28}
-            label={{ value: 'Time', position: 'insideBottomRight', offset: -2, fontSize: 11, fill: '#64748b' }}
+            label={{
+              value: 'Time',
+              position: 'insideBottomRight',
+              offset: -2,
+              fontSize: 11,
+              fill: colors.tick,
+            }}
           />
           <YAxis
             yAxisId="count"
-            tick={{ fontSize: 11, fill: '#64748b' }}
+            tick={{ fontSize: 11, fill: colors.tick }}
             axisLine={false}
             tickLine={false}
             width={36}
-            label={{ value: 'Count', angle: -90, position: 'insideLeft', fontSize: 11, fill: '#64748b' }}
+            label={{
+              value: 'Count',
+              angle: -90,
+              position: 'insideLeft',
+              fontSize: 11,
+              fill: colors.tick,
+            }}
           />
           <YAxis
             yAxisId="sentiment"
             orientation="right"
             domain={[-1, 1]}
-            tick={{ fontSize: 11, fill: '#64748b' }}
+            tick={{ fontSize: 11, fill: colors.tick }}
             axisLine={false}
             tickLine={false}
             width={36}
           />
-          <Tooltip content={<ChartTip />} />
+          <Tooltip content={<ChartTooltip />} />
           <Legend
             verticalAlign="top"
             align="right"
             iconType="circle"
-            wrapperStyle={{ fontSize: 12, color: '#0f172a', paddingBottom: 8 }}
+            wrapperStyle={{ fontSize: 12, color: colors.legend, paddingBottom: 8 }}
           />
           <Line
             yAxisId="count"

@@ -38,7 +38,7 @@ export function EmotionModelPanel() {
 
   return (
     <div className="space-y-3">
-      <p className="text-[12px] text-muted">
+      <p className="text-[13px] leading-5 text-muted">
         {connected
           ? 'Colab / FastAPI model is configured (`VITE_MODEL_URL`).'
           : 'Model offline — preview mapping only. Set VITE_MODEL_URL after Colab export.'}
@@ -50,7 +50,7 @@ export function EmotionModelPanel() {
           setText(event.target.value)
         }}
         rows={3}
-        className="w-full resize-none rounded-2xl border border-line bg-slate-50 px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+        className="w-full resize-none rounded-2xl border border-line bg-inset px-3.5 py-3 text-[13px] text-ink outline-none focus:border-accent"
       />
       <button
         type="button"
@@ -66,7 +66,7 @@ export function EmotionModelPanel() {
         {rows.map((row) => (
           <li key={row.label} className="grid grid-cols-[7rem_1fr_2.5rem] items-center gap-2 text-[12px]">
             <span className="truncate text-ink">{row.label}</span>
-            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-1.5 overflow-hidden rounded-full bg-line">
               <div
                 className={`h-full rounded-full ${row.bucket === 'NEGATIVE' ? 'bg-bad' : row.bucket === 'POSITIVE' ? 'bg-good' : 'bg-ink'}`}
                 style={{ width: `${(row.score / max) * 100}%` }}

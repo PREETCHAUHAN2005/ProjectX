@@ -1,4 +1,5 @@
 import type { DemographicSlice } from '../types/contracts'
+import { useChartColors } from '../lib/theme'
 
 const LAYOUT: Record<string, { x: number; y: number; r: number }> = {
   India: { x: 68, y: 48, r: 18 },
@@ -11,11 +12,17 @@ const LAYOUT: Record<string, { x: number; y: number; r: number }> = {
 }
 
 export function ChoroplethMap({ slices }: { slices: DemographicSlice[] }) {
+  const colors = useChartColors()
   const max = Math.max(...slices.map((item) => item.count), 1)
   return (
     <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
-      <svg viewBox="0 0 100 72" className="h-44 w-full rounded-2xl bg-slate-50" role="img" aria-label="Country density">
-        <rect width="100" height="72" fill="#f1f5f9" />
+      <svg
+        viewBox="0 0 100 72"
+        className="h-44 w-full rounded-2xl bg-inset"
+        role="img"
+        aria-label="Country density"
+      >
+        <rect width="100" height="72" fill={colors.mapFill} />
         {slices.map((item) => {
           const point = LAYOUT[item.key] ?? {
             x: 12 + (item.key.length * 7) % 80,
@@ -30,8 +37,8 @@ export function ChoroplethMap({ slices }: { slices: DemographicSlice[] }) {
                 cy={point.y}
                 r={point.r * (0.55 + intensity * 0.7)}
                 fill={`rgba(249, 115, 22, ${0.2 + intensity * 0.65})`}
-                stroke="#0f172a"
-                strokeOpacity="0.12"
+                stroke={colors.ink}
+                strokeOpacity="0.18"
               />
             </g>
           )
@@ -44,7 +51,7 @@ export function ChoroplethMap({ slices }: { slices: DemographicSlice[] }) {
               <span className="text-ink">{item.key}</span>
               <span className="tabular text-muted">{item.count}</span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-1.5 overflow-hidden rounded-full bg-line">
               <div
                 className="h-full rounded-full bg-accent"
                 style={{ width: `${(item.count / max) * 100}%` }}

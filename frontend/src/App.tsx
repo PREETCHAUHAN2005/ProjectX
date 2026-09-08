@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { ThemeToggle } from './components/ThemeToggle'
 import { DemographicsPanel } from './components/DemographicsPanel'
 import { EmotionDonut } from './components/EmotionDonut'
 import { EmotionModelPanel } from './components/EmotionModelPanel'
@@ -13,6 +13,7 @@ import { WidgetPanel } from './components/WidgetPanel'
 import { hoursAgo } from './lib/format'
 import { PROTOTYPE_NOTICE } from './lib/prototypeData'
 import { useDashboard } from './lib/useDashboard'
+import { useState } from 'react'
 
 function StatusChip({
   label,
@@ -24,7 +25,7 @@ function StatusChip({
   const color =
     tone === 'live' ? 'bg-good' : tone === 'warn' ? 'bg-bad' : 'bg-warn'
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-100">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-inset px-2.5 py-1 text-[11px] font-medium text-ink">
       <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
       {label}
     </span>
@@ -35,7 +36,7 @@ export default function App() {
   const dashboard = useDashboard()
   const [section, setSection] = useState<SidebarSection>('overview')
   const field =
-    'mt-1 w-full rounded-2xl border border-line bg-slate-50 px-3 py-2 text-[13px] text-ink outline-none focus:border-accent'
+    'mt-1 w-full rounded-2xl border border-line bg-inset px-3 py-2 text-[13px] text-ink outline-none focus:border-accent'
 
   function goTo(id: SidebarSection): void {
     setSection(id)
@@ -43,7 +44,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-svh bg-canvas text-slate-100">
+    <div className="min-h-svh bg-canvas text-ink">
       <div className="flex min-h-svh">
         <Sidebar
           active={section}
@@ -60,12 +61,12 @@ export default function App() {
         />
 
         <div className="min-w-0 flex-1">
-          <div className="flex gap-2 overflow-x-auto border-b border-white/10 px-4 py-2 md:hidden">
+          <div className="flex gap-2 overflow-x-auto border-b border-line px-4 py-2 md:hidden">
             {['overview', 'timeline', 'network', 'live', 'model'].map((id) => (
               <button
                 key={id}
                 type="button"
-                className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-[12px] capitalize"
+                className="shrink-0 rounded-full border border-line bg-surface px-3 py-1 text-[12px] capitalize text-ink"
                 onClick={() => {
                   goTo(id as SidebarSection)
                 }}
@@ -74,12 +75,14 @@ export default function App() {
               </button>
             ))}
           </div>
-          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4 lg:px-8">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-sidebar/80 px-5 py-4 backdrop-blur-sm lg:px-8">
             <div>
-              <p className="text-[11px] font-medium tracking-[0.14em] text-slate-500 uppercase">
+              <p className="text-[11px] font-medium tracking-[0.14em] text-muted uppercase">
                 Social intelligence
               </p>
-              <h1 className="text-[32px] font-extrabold leading-none tracking-tight">Analytics</h1>
+              <h1 className="text-[32px] font-extrabold leading-none tracking-tight text-ink">
+                Analytics
+              </h1>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <StatusChip
@@ -90,17 +93,18 @@ export default function App() {
                 label={`WS ${dashboard.wsStatus}`}
                 tone={dashboard.wsStatus === 'connected' ? 'live' : 'preview'}
               />
+              <ThemeToggle />
             </div>
           </header>
 
           {dashboard.dataMode === 'prototype' ? (
-            <p className="border-b border-white/10 bg-accent/15 px-5 py-2 text-[12px] text-orange-100 lg:px-8">
+            <p className="border-b border-line bg-accent-soft px-5 py-2 text-[12px] text-ink lg:px-8">
               {PROTOTYPE_NOTICE}
             </p>
           ) : null}
 
           {dashboard.spikeNotice ? (
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-red-500/15 px-5 py-2 text-[12px] lg:px-8">
+            <div className="flex items-center justify-between gap-3 border-b border-line bg-bad-soft px-5 py-2 text-[12px] text-ink lg:px-8">
               <span>Spike: {dashboard.spikeNotice}</span>
               <button type="button" className="underline" onClick={dashboard.clearSpike}>
                 Dismiss
@@ -171,7 +175,7 @@ export default function App() {
                   <button
                     key={hours}
                     type="button"
-                    className="rounded-full border border-line px-3 py-1.5 text-[12px] text-ink"
+                    className="rounded-full border border-line bg-inset px-3 py-1.5 text-[12px] text-ink hover:bg-surface"
                     onClick={() => {
                       dashboard.setFrom(hoursAgo(hours))
                       dashboard.setTo(hoursAgo(0))
@@ -266,7 +270,7 @@ export default function App() {
                 className="scroll-mt-4 rounded-[20px] border border-line bg-surface p-5 text-ink card-shadow"
               >
                 <h2 className="mb-1 text-[15px] font-bold">Live feed</h2>
-                <p className="mb-3 text-[12px] text-muted">Posts and comments · event:new_post</p>
+                <p className="mb-4 text-[12px] text-muted">Posts and comments · event:new_post</p>
                 <LiveFeed posts={dashboard.feed} />
               </section>
               <section
@@ -274,7 +278,7 @@ export default function App() {
                 className="scroll-mt-4 rounded-[20px] border border-line bg-surface p-5 text-ink card-shadow"
               >
                 <h2 className="mb-1 text-[15px] font-bold">Emotion model</h2>
-                <p className="mb-3 text-[12px] text-muted">
+                <p className="mb-3 text-[13px] leading-5 text-muted">
                   Score a post with GoEmotions (Colab slot or preview)
                 </p>
                 <EmotionModelPanel />

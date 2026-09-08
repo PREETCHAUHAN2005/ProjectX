@@ -1,5 +1,6 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { EmotionScore } from '../types/contracts'
+import { ChartTooltip } from './ChartTooltip'
 import { emotionColor } from './NetworkCanvas'
 
 export function EmotionDonut({ emotions }: { emotions: EmotionScore[] }) {
@@ -26,7 +27,7 @@ export function EmotionDonut({ emotions }: { emotions: EmotionScore[] }) {
                 <Cell key={item.label} fill={emotionColor(item.label)} />
               ))}
             </Pie>
-            <Tooltip />
+            <Tooltip content={<ChartTooltip />} />
           </PieChart>
         </ResponsiveContainer>
       </div>

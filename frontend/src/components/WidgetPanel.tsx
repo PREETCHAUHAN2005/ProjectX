@@ -31,16 +31,16 @@ export function WidgetPanel({
       </div>
       {state.status === 'loading' ? (
         <div className="flex flex-1 flex-col justify-end gap-2">
-          <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
-          <div className="h-3 w-2/3 animate-pulse rounded bg-slate-100" />
-          <div className="h-3 w-1/3 animate-pulse rounded bg-slate-100" />
+          <div className="h-24 animate-pulse rounded-xl bg-inset" />
+          <div className="h-3 w-2/3 animate-pulse rounded bg-inset" />
+          <div className="h-3 w-1/3 animate-pulse rounded bg-inset" />
         </div>
       ) : null}
       {state.status === 'error' ? (
         <p className="text-sm text-bad">{state.error ?? 'Request failed'}</p>
       ) : null}
       {state.status === 'empty' ? (
-        <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-line bg-slate-50">
+        <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-line bg-inset">
           <p className="text-sm text-muted">No records for this window.</p>
         </div>
       ) : null}
