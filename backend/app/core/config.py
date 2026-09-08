@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
+    # IMPLEMENTATION: seed a readable post/comment/emotion scenario for local demos.
+    # Default on in development so `uvicorn` is recordable without Redis/Telegram.
+    demo_seed: bool = True
+    demo_tick_seconds: float = 4.0
 
     redis_url: str = "redis://127.0.0.1:6379/0"
     mongodb_uri: str = ""

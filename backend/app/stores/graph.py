@@ -21,11 +21,30 @@ logger = logging.getLogger(__name__)
 MENTION_RE = re.compile(r"@([A-Za-z0-9_]{1,32})")
 
 
+def _dominant_emotion(emotions: list[Any]) -> str:
+    best_label = ""
+    best_score = -1.0
+    for item in emotions:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "")
+        try:
+            score = float(item.get("score") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if label and score > best_score:
+            best_label = label
+            best_score = score
+    return best_label
+
+
 class MemoryGraphStore:
     def __init__(self) -> None:
         self.users: dict[str, dict[str, str]] = {}
         self.topics: set[str] = set()
         self.interactions: list[dict[str, Any]] = []
+        # IMPLEMENTATION: last dominant emotion per user for readable community colors.
+        self.user_community: dict[str, str] = {}
 
     def upsert_user(self, user_id: str, handle: str, platform: str) -> None:
         self.users[user_id] = {"id": user_id, "handle": handle, "platform": platform}
@@ -52,7 +71,12 @@ class MemoryGraphStore:
             }
         )
 
-    def ingest_post(self, document: dict[str, Any]) -> None:
+    def ingest_post(
+        self,
+        document: dict[str, Any],
+        *,
+        reply_to_user_id: str | None = None,
+    ) -> None:
         author = document.get("author") or {}
         user_id = str(author.get("user_id") or "")
         handle = str(author.get("handle") or "")
@@ -63,14 +87,31 @@ class MemoryGraphStore:
         topic_name = analytics.get("topic_name")
         if isinstance(topic_name, str) and topic_name:
             self.upsert_topic(topic_name)
+        dominant = _dominant_emotion(analytics.get("emotions") or [])
+        if user_id and dominant:
+            self.user_community[user_id] = dominant
         raw_text = str((document.get("content") or {}).get("raw_text") or "")
         timestamp = str(document.get("timestamp") or "")
+        if reply_to_user_id and user_id and reply_to_user_id != user_id:
+            if reply_to_user_id not in self.users:
+                self.upsert_user(reply_to_user_id, reply_to_user_id, platform)
+            self.add_interaction(user_id, reply_to_user_id, "reply", timestamp, 1.5)
         for mention in MENTION_RE.findall(raw_text):
             if mention.lower() == handle.lower():
                 continue
-            mention_id = f"mention:{mention.lower()}"
+            existing_id = next(
+                (
+                    uid
+                    for uid, meta in self.users.items()
+                    if meta["handle"].lower() == mention.lower()
+                ),
+                None,
+            )
+            mention_id = existing_id or f"mention:{mention.lower()}"
             if mention_id not in self.users:
                 self.upsert_user(mention_id, mention, platform)
+            if mention_id not in self.user_community:
+                self.user_community[mention_id] = "neutral"
             self.add_interaction(user_id, mention_id, "mention", timestamp, 1.0)
 
     def snapshot(
@@ -103,7 +144,9 @@ class MemoryGraphStore:
                     handle=meta["handle"],
                     platform=meta["platform"],
                     pagerank=rank,
-                    community=communities.get(user_id, "0"),
+                    community=self.user_community.get(
+                        user_id, communities.get(user_id, "neutral")
+                    ),
                 )
             )
         allowed = {node.id for node in nodes}
@@ -116,6 +159,7 @@ class MemoryGraphStore:
         self.users.clear()
         self.topics.clear()
         self.interactions.clear()
+        self.user_community.clear()
 
 
 def _pagerank(user_ids: list[str], links: list[GraphLink], iterations: int = 15) -> dict[str, float]:

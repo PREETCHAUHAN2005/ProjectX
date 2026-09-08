@@ -8,7 +8,7 @@ import {
 
 export function EmotionModelPanel() {
   const [text, setText] = useState(
-    'Relief operations expanded after overnight rain. Power restored in two districts.',
+    'Orange alert: heavy rain over Mumbai. Water entered our building lobby. Need pumps.',
   )
   const [rows, setRows] = useState<EmotionBar[]>(() => previewEmotions(text).slice(0, 8))
   const [mode, setMode] = useState<'preview' | 'live' | 'error'>('preview')
@@ -50,7 +50,7 @@ export function EmotionModelPanel() {
           setText(event.target.value)
         }}
         rows={3}
-        className="w-full resize-none rounded-xl border border-line bg-canvas px-3 py-2 text-[13px] outline-none focus:border-ink"
+        className="w-full resize-none rounded-2xl border border-line bg-slate-50 px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
       />
       <button
         type="button"
@@ -58,7 +58,7 @@ export function EmotionModelPanel() {
         onClick={() => {
           void run()
         }}
-        className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-medium text-white disabled:opacity-40"
+        className="rounded-full bg-accent px-4 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
       >
         {busy ? 'Scoring…' : connected ? 'Run model' : 'Preview scores'}
       </button>
@@ -66,7 +66,7 @@ export function EmotionModelPanel() {
         {rows.map((row) => (
           <li key={row.label} className="grid grid-cols-[7rem_1fr_2.5rem] items-center gap-2 text-[12px]">
             <span className="truncate text-ink">{row.label}</span>
-            <div className="h-1.5 overflow-hidden rounded-full bg-[#eeeae2]">
+            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
               <div
                 className={`h-full rounded-full ${row.bucket === 'NEGATIVE' ? 'bg-bad' : row.bucket === 'POSITIVE' ? 'bg-good' : 'bg-ink'}`}
                 style={{ width: `${(row.score / max) * 100}%` }}

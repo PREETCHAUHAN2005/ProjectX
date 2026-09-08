@@ -19,6 +19,14 @@ import {
   prototypeTimeline,
   prototypeTrending,
 } from './prototypeData'
+import {
+  commentCountFromTimeline,
+  emotionMixFromTimeline,
+  featuredThread,
+  postCountFromTimeline,
+  topEmotionLabel,
+} from './thread'
+import { hoursAgo } from './format'
 import type {
   DemographicsResponse,
   GraphDeltaPayload,
@@ -78,16 +86,31 @@ function mergeGraph(
   return { nodes, links }
 }
 
+function applyPrototypeWidgets(
+  setTimeline: (value: LoadState<TimelineResponse>) => void,
+  setGraph: (value: LoadState<NetworkGraphResponse>) => void,
+  setDemographics: (value: LoadState<DemographicsResponse>) => void,
+  setTrending: (value: LoadState<TrendingResponse>) => void,
+  setFeed: (value: NewPostPayload[]) => void,
+) {
+  const proto = seedPrototype()
+  setTimeline(proto.timeline)
+  setGraph(proto.graph)
+  setDemographics(proto.demographics)
+  setTrending(proto.trending)
+  setFeed(prototypeFeed())
+}
+
 export function useDashboard() {
   const [topic, setTopic] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [from, setFrom] = useState(() => hoursAgo(24))
+  const [to, setTo] = useState(() => hoursAgo(0))
   const [severity, setSeverity] = useState('')
   const [preferPrototype, setPreferPrototype] = useState(false)
   const [dataMode, setDataMode] = useState<DataMode>('prototype')
   const [apiStatus, setApiStatus] = useState('checking')
   const [wsStatus, setWsStatus] = useState('disconnected')
-  const [feed, setFeed] = useState<NewPostPayload[]>(() => prototypeFeed())
+  const [feed, setFeed] = useState<NewPostPayload[]>([])
   const [spikeNotice, setSpikeNotice] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<LoadState<TimelineResponse>>(initialLoad)
   const [graph, setGraph] = useState<LoadState<NetworkGraphResponse>>(initialLoad)
@@ -95,6 +118,7 @@ export function useDashboard() {
     useState<LoadState<DemographicsResponse>>(initialLoad)
   const [trending, setTrending] = useState<LoadState<TrendingResponse>>(initialLoad)
   const tick = useRef(0)
+  const liveFeedReset = useRef(false)
 
   const load = useCallback(async (): Promise<void> => {
     setTimeline(initialLoad())
@@ -103,14 +127,9 @@ export function useDashboard() {
     setTrending(initialLoad())
 
     if (preferPrototype) {
-      const proto = seedPrototype()
-      setTimeline(proto.timeline)
-      setGraph(proto.graph)
-      setDemographics(proto.demographics)
-      setTrending(proto.trending)
+      applyPrototypeWidgets(setTimeline, setGraph, setDemographics, setTrending, setFeed)
       setDataMode('prototype')
       setApiStatus('preview')
-      setFeed(prototypeFeed())
       return
     }
 
@@ -118,14 +137,9 @@ export function useDashboard() {
       const health = await getHealth()
       setApiStatus(health.status)
     } catch {
-      const proto = seedPrototype()
-      setTimeline(proto.timeline)
-      setGraph(proto.graph)
-      setDemographics(proto.demographics)
-      setTrending(proto.trending)
+      applyPrototypeWidgets(setTimeline, setGraph, setDemographics, setTrending, setFeed)
       setDataMode('prototype')
       setApiStatus('unreachable')
-      setFeed(prototypeFeed())
       return
     }
 
@@ -133,31 +147,16 @@ export function useDashboard() {
       topic: topic || undefined,
       from: from || undefined,
       to: to || undefined,
+      severity: severity || undefined,
     }
 
     try {
       const [timelineData, graphData, demoData, trendingData] = await Promise.all([
         getTimeline({ ...query, bucket: 'hour' }),
-        getNetworkGraph({ topic: query.topic }),
-        getDemographics(query.topic),
+        getNetworkGraph({ topic: query.topic, severity: query.severity }),
+        getDemographics(query.topic, query.severity),
         getTrending(),
       ])
-      const empty =
-        timelineData.buckets.length === 0 &&
-        graphData.nodes.length === 0 &&
-        demoData.country.length === 0 &&
-        trendingData.topics.length === 0
-      if (empty) {
-        const proto = seedPrototype()
-        setTimeline(proto.timeline)
-        setGraph(proto.graph)
-        setDemographics(proto.demographics)
-        setTrending(proto.trending)
-        setDataMode('prototype')
-        setApiStatus('empty-preview')
-        setFeed(prototypeFeed())
-        return
-      }
       setTimeline(fromResult(timelineData, timelineData.buckets.length === 0))
       setGraph(fromResult(graphData, graphData.nodes.length === 0))
       setDemographics(
@@ -170,17 +169,16 @@ export function useDashboard() {
       )
       setTrending(fromResult(trendingData, trendingData.topics.length === 0))
       setDataMode('live')
-    } catch {
-      const proto = seedPrototype()
-      setTimeline(proto.timeline)
-      setGraph(proto.graph)
-      setDemographics(proto.demographics)
-      setTrending(proto.trending)
-      setDataMode('prototype')
-      setApiStatus('unreachable')
-      setFeed(prototypeFeed())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Request failed'
+      setTimeline({ status: 'error', data: null, error: message })
+      setGraph({ status: 'error', data: null, error: message })
+      setDemographics({ status: 'error', data: null, error: message })
+      setTrending({ status: 'error', data: null, error: message })
+      setDataMode('live')
+      setApiStatus('error')
     }
-  }, [from, preferPrototype, to, topic])
+  }, [from, preferPrototype, severity, to, topic])
 
   useEffect(() => {
     void load()
@@ -216,6 +214,7 @@ export function useDashboard() {
     const socket = new DashboardSocket({
       onOpen: () => {
         setWsStatus('connected')
+        liveFeedReset.current = true
         socket.sendFilter({
           type: 'filter',
           topic: topic || undefined,
@@ -238,7 +237,19 @@ export function useDashboard() {
           if (!isNewPostPayload(envelope.payload)) {
             return
           }
-          setFeed((current) => [envelope.payload, ...current].slice(0, 50))
+          const incoming = envelope.payload
+          setFeed((current) => {
+            const next = liveFeedReset.current ? [] : current
+            liveFeedReset.current = false
+            const exists = next.some(
+              (item) =>
+                item.platform === incoming.platform && item.external_id === incoming.external_id,
+            )
+            if (exists) {
+              return next
+            }
+            return [incoming, ...next].slice(0, 50)
+          })
           return
         }
         if (envelope.event === 'event:trend_spike') {
@@ -251,40 +262,38 @@ export function useDashboard() {
           return
         }
         if (envelope.event === 'event:graph_delta' && isGraphDeltaPayload(envelope.payload)) {
+          const delta = envelope.payload
           setGraph((current) => {
             if (current.data === null) {
-              return fromResult(envelope.payload, envelope.payload.nodes.length === 0)
+              return fromResult(delta, delta.nodes.length === 0)
             }
             return {
               status: 'ready',
-              data: mergeGraph(current.data, envelope.payload),
+              data: mergeGraph(current.data, delta),
               error: null,
             }
           })
         }
       },
     })
+    liveFeedReset.current = true
     socket.connect()
     return () => {
       socket.disconnect()
     }
   }, [dataMode, from, severity, to, topic])
 
+  const emotions = useMemo(() => emotionMixFromTimeline(timeline.data), [timeline.data])
+  const thread = useMemo(() => featuredThread(feed), [feed])
+
   const metrics = useMemo(() => {
-    const buckets = timeline.data?.buckets ?? []
-    const volume = buckets.reduce((sum, bucket) => sum + bucket.count, 0)
-    const polarity =
-      buckets.length === 0
-        ? 0
-        : buckets.reduce((sum, bucket) => sum + bucket.average_sentiment, 0) /
-          buckets.length
     return {
-      volume,
-      polarity,
+      posts: postCountFromTimeline(timeline.data),
+      comments: commentCountFromTimeline(timeline.data),
+      topEmotion: topEmotionLabel(emotions),
       topics: trending.data?.topics.length ?? 0,
-      nodes: graph.data?.nodes.length ?? 0,
     }
-  }, [graph.data, timeline.data, trending.data])
+  }, [emotions, timeline.data, trending.data])
 
   return {
     topic,
@@ -310,6 +319,8 @@ export function useDashboard() {
     demographics,
     trending,
     metrics,
+    emotions,
+    thread,
     reload: load,
   }
 }

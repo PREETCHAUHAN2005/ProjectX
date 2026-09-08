@@ -14,7 +14,6 @@ def test_websocket_accepts_connection_and_ignores_malformed() -> None:
 
 
 def test_websocket_broadcast_new_post() -> None:
-    client = TestClient(app)
     envelope = WsEnvelope(
         event="event:new_post",
         payload={
@@ -25,13 +24,13 @@ def test_websocket_broadcast_new_post() -> None:
             "content": {"raw_text": "hello"},
         },
     )
-    with client.websocket_connect("/ws") as websocket:
-        import anyio
-
-        anyio.from_thread.run(hub.broadcast, envelope)
-        message = websocket.receive_json()
-        assert message["event"] == "event:new_post"
-        assert message["payload"]["external_id"] == "1"
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as websocket:
+            assert client.portal is not None
+            client.portal.call(hub.broadcast, envelope)
+            message = websocket.receive_json()
+            assert message["event"] == "event:new_post"
+            assert message["payload"]["external_id"] == "1"
 
 
 def test_trend_spike_event_payload() -> None:
@@ -44,10 +43,9 @@ def test_trend_spike_event_payload() -> None:
             "sample_size": 51,
         },
     )
-    client = TestClient(app)
-    with client.websocket_connect("/ws") as websocket:
-        import anyio
-
-        anyio.from_thread.run(hub.broadcast, envelope)
-        message = websocket.receive_json()
-        assert message["event"] == "event:trend_spike"
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as websocket:
+            assert client.portal is not None
+            client.portal.call(hub.broadcast, envelope)
+            message = websocket.receive_json()
+            assert message["event"] == "event:trend_spike"

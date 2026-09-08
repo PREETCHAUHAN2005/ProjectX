@@ -7,11 +7,52 @@ Indexes are an open decision and are not created here as a product contract.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_ts(value: str) -> datetime | None:
+    text = str(value or "").replace("Z", "+00:00")
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _matches_filters(
+    row: dict[str, Any],
+    *,
+    topic: str | None,
+    from_ts: str | None,
+    to_ts: str | None,
+    severity: str | None,
+) -> bool:
+    analytics = row.get("analytics") or {}
+    if topic:
+        if topic not in {analytics.get("topic_id"), analytics.get("topic_name")}:
+            return False
+    if severity:
+        if str(analytics.get("severity") or "") != severity:
+            return False
+    stamp = _parse_ts(str(row.get("timestamp") or ""))
+    if from_ts:
+        start = _parse_ts(from_ts)
+        if start is not None and (stamp is None or stamp < start):
+            return False
+    if to_ts:
+        end = _parse_ts(to_ts)
+        if end is not None and (stamp is None or stamp > end):
+            return False
+    return True
 
 
 class PostStore(Protocol):
@@ -23,6 +64,7 @@ class PostStore(Protocol):
         topic: str | None = None,
         from_ts: str | None = None,
         to_ts: str | None = None,
+        severity: str | None = None,
     ) -> list[dict[str, Any]]: ...
 
 
@@ -43,22 +85,20 @@ class MemoryPostStore:
         topic: str | None = None,
         from_ts: str | None = None,
         to_ts: str | None = None,
+        severity: str | None = None,
     ) -> list[dict[str, Any]]:
-        rows = list(self._docs.values())
-        if topic:
-            rows = [
-                row
-                for row in rows
-                if topic
-                in {
-                    (row.get("analytics") or {}).get("topic_id"),
-                    (row.get("analytics") or {}).get("topic_name"),
-                }
-            ]
-        if from_ts:
-            rows = [row for row in rows if str(row.get("timestamp") or "") >= from_ts]
-        if to_ts:
-            rows = [row for row in rows if str(row.get("timestamp") or "") <= to_ts]
+        rows = [
+            row
+            for row in self._docs.values()
+            if _matches_filters(
+                row,
+                topic=topic,
+                from_ts=from_ts,
+                to_ts=to_ts,
+                severity=severity,
+            )
+        ]
+        rows.sort(key=lambda row: str(row.get("timestamp") or ""))
         return rows
 
     def clear(self) -> None:
@@ -98,6 +138,7 @@ class MongoPostStore:
         topic: str | None = None,
         from_ts: str | None = None,
         to_ts: str | None = None,
+        severity: str | None = None,
     ) -> list[dict[str, Any]]:
         query: dict[str, Any] = {}
         if topic:
@@ -112,7 +153,11 @@ class MongoPostStore:
             ts_filter["$lte"] = to_ts
         if ts_filter:
             query["timestamp"] = ts_filter
-        return list(self._col().find(query, {"_id": 0}))
+        if severity:
+            query["analytics.severity"] = severity
+        rows = list(self._col().find(query, {"_id": 0}))
+        rows.sort(key=lambda row: str(row.get("timestamp") or ""))
+        return rows
 
 
 _store: MemoryPostStore | MongoPostStore | None = None

@@ -2,7 +2,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { DemographicsResponse } from '../types/contracts'
 import { ChoroplethMap } from './ChoroplethMap'
 
-const PALETTE = ['#141413', '#3d3ce0', '#0f7a5a', '#9a6700', '#b42318', '#6f6b64']
+const PALETTE = ['#0f172a', '#1e3a8a', '#f97316', '#0f766e', '#dc2626', '#64748b']
 
 export function DemographicsPanel({ data }: { data: DemographicsResponse }) {
   return (
@@ -40,7 +40,7 @@ export function DemographicsPanel({ data }: { data: DemographicsResponse }) {
           <ul className="space-y-1.5 text-sm">
             {data.language.map((item) => (
               <li key={item.key} className="flex justify-between">
-                <span>{item.key}</span>
+                <span className="text-ink">{item.key}</span>
                 <span className="tabular text-muted">{item.count}</span>
               </li>
             ))}

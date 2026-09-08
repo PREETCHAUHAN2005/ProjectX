@@ -1,8 +1,8 @@
 import {
-  Area,
   CartesianGrid,
-  ComposedChart,
+  Legend,
   Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -15,9 +15,10 @@ function tickLabel(value: string): string {
   if (Number.isNaN(stamp)) {
     return value.slice(11, 16)
   }
-  return new Date(stamp).toLocaleTimeString('en-IN', {
+  return new Date(stamp).toLocaleString('en-IN', {
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit',
   })
 }
 
@@ -34,12 +35,16 @@ function ChartTip({
     return null
   }
   return (
-    <div className="rounded-xl border border-line bg-surface px-3 py-2 text-xs shadow-sm">
+    <div className="rounded-xl border border-line bg-surface px-3 py-2 text-xs shadow-sm text-ink">
       <p className="mb-1 text-muted">{label}</p>
       {payload.map((item) => (
         <p key={item.name} className="tabular text-ink">
-          <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: item.color }} />
-          {item.name}: {typeof item.value === 'number' ? item.value.toFixed(2) : item.value}
+          <span
+            className="mr-2 inline-block h-2 w-2 rounded-full"
+            style={{ background: item.color }}
+          />
+          {item.name}:{' '}
+          {typeof item.value === 'number' ? item.value.toFixed(item.name === 'Polarity' ? 2 : 0) : item.value}
         </p>
       ))}
     </div>
@@ -48,64 +53,75 @@ function ChartTip({
 
 export function TimelineChart({ data }: { data: TimelineResponse }) {
   const rows = data.buckets.map((bucket) => ({
-    ...bucket,
     label: tickLabel(bucket.timestamp),
+    Posts: bucket.post_count ?? 0,
+    Comments: bucket.comment_count ?? Math.max(bucket.count - (bucket.post_count ?? 0), 0),
+    Polarity: bucket.average_sentiment,
   }))
 
   return (
-    <div className="h-[260px] w-full">
+    <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-          <defs>
-            <linearGradient id="volumeFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3d3ce0" stopOpacity={0.22} />
-              <stop offset="100%" stopColor="#3d3ce0" stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid stroke="#e6e1d6" vertical={false} />
+        <LineChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke="#eee7de" strokeDasharray="3 6" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 11, fill: '#6f6b64' }}
+            tick={{ fontSize: 11, fill: '#64748b' }}
             axisLine={false}
             tickLine={false}
-            minTickGap={24}
+            minTickGap={28}
+            label={{ value: 'Time', position: 'insideBottomRight', offset: -2, fontSize: 11, fill: '#64748b' }}
           />
           <YAxis
             yAxisId="count"
-            tick={{ fontSize: 11, fill: '#6f6b64' }}
+            tick={{ fontSize: 11, fill: '#64748b' }}
             axisLine={false}
             tickLine={false}
             width={36}
+            label={{ value: 'Count', angle: -90, position: 'insideLeft', fontSize: 11, fill: '#64748b' }}
           />
           <YAxis
             yAxisId="sentiment"
             orientation="right"
             domain={[-1, 1]}
-            tick={{ fontSize: 11, fill: '#6f6b64' }}
+            tick={{ fontSize: 11, fill: '#64748b' }}
             axisLine={false}
             tickLine={false}
             width={36}
           />
           <Tooltip content={<ChartTip />} />
-          <Area
+          <Legend
+            verticalAlign="top"
+            align="right"
+            iconType="circle"
+            wrapperStyle={{ fontSize: 12, color: '#0f172a', paddingBottom: 8 }}
+          />
+          <Line
             yAxisId="count"
             type="monotone"
-            dataKey="count"
-            fill="url(#volumeFill)"
-            stroke="#3d3ce0"
-            strokeWidth={2}
-            name="Volume"
+            dataKey="Posts"
+            stroke="#1e3a8a"
+            strokeWidth={2.4}
+            dot={{ r: 3, fill: '#1e3a8a', strokeWidth: 0 }}
+          />
+          <Line
+            yAxisId="count"
+            type="monotone"
+            dataKey="Comments"
+            stroke="#f97316"
+            strokeWidth={2.4}
+            dot={{ r: 3, fill: '#f97316', strokeWidth: 0 }}
           />
           <Line
             yAxisId="sentiment"
             type="monotone"
-            dataKey="average_sentiment"
-            stroke="#141413"
+            dataKey="Polarity"
+            stroke="#0f766e"
             strokeWidth={1.6}
+            strokeDasharray="5 4"
             dot={false}
-            name="Polarity"
           />
-        </ComposedChart>
+        </LineChart>
       </ResponsiveContainer>
     </div>
   )
