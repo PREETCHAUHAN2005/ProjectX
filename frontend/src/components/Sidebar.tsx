@@ -120,19 +120,19 @@ export function Sidebar({
   const live = dataMode === 'live'
 
   return (
-    <aside className="sticky top-0 hidden h-svh w-[248px] shrink-0 flex-col bg-sidebar text-slate-100 md:flex">
-      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-4">
+    <aside className="sticky top-0 hidden h-svh w-[248px] shrink-0 flex-col border-r border-line bg-sidebar text-ink md:flex">
+      <div className="flex items-center gap-3 border-b border-line px-4 py-4">
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-[13px] font-bold text-white">
           PX
         </div>
         <div className="min-w-0">
           <p className="truncate text-[14px] font-semibold">ProjectX</p>
-          <p className="truncate text-[11px] text-slate-400">NTRO · SIH 2026</p>
+          <p className="truncate text-[11px] text-muted">NTRO · SIH 2026</p>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
-        <p className="px-2 text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+        <p className="px-2 text-[10px] font-semibold tracking-[0.16em] text-muted uppercase">
           Console
         </p>
         <nav className="mt-2 space-y-0.5" aria-label="Dashboard sections">
@@ -146,17 +146,15 @@ export function Sidebar({
                   onNavigate(item.id)
                 }}
                 className={`flex w-full items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left transition-colors ${
-                  selected
-                    ? 'bg-white text-ink'
-                    : 'text-slate-200 hover:bg-white/10'
+                  selected ? 'bg-accent text-white' : 'text-ink hover:bg-inset'
                 }`}
               >
-                <span className={selected ? 'text-ink' : 'text-slate-400'}>
+                <span className={selected ? 'text-white' : 'text-muted'}>
                   <NavIcon name={item.icon} />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-[13px] font-medium">{item.label}</span>
-                  <span className={`block text-[11px] ${selected ? 'text-muted' : 'text-slate-500'}`}>
+                  <span className={`block text-[11px] ${selected ? 'text-white/80' : 'text-muted'}`}>
                     {item.hint}
                   </span>
                 </span>
@@ -165,45 +163,45 @@ export function Sidebar({
           })}
         </nav>
 
-        <p className="mt-6 px-2 text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+        <p className="mt-6 px-2 text-[10px] font-semibold tracking-[0.16em] text-muted uppercase">
           Sources
         </p>
         <ul className="mt-2 space-y-1.5 px-1">
-          <li className="flex items-center justify-between rounded-2xl bg-white/5 px-3 py-2 text-[12px]">
+          <li className="flex items-center justify-between rounded-2xl bg-inset px-3 py-2 text-[12px]">
             <span>Telegram</span>
-            <span className={`font-medium ${live ? 'text-emerald-400' : 'text-amber-300'}`}>
+            <span className={`font-medium ${live ? 'text-good' : 'text-warn'}`}>
               {live ? 'live' : 'preview'}
             </span>
           </li>
-          <li className="flex items-center justify-between rounded-2xl bg-white/5 px-3 py-2 text-[12px]">
+          <li className="flex items-center justify-between rounded-2xl bg-inset px-3 py-2 text-[12px]">
             <span>X / Twitter</span>
-            <span className="font-medium text-slate-400">adapter</span>
+            <span className="font-medium text-muted">adapter</span>
           </li>
         </ul>
 
-        <p className="mt-6 px-2 text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+        <p className="mt-6 px-2 text-[10px] font-semibold tracking-[0.16em] text-muted uppercase">
           Session
         </p>
-        <div className="mt-2 space-y-2 rounded-2xl bg-white/5 px-3 py-3 text-[12px]">
+        <div className="mt-2 space-y-2 rounded-2xl bg-inset px-3 py-3 text-[12px]">
           <div className="flex justify-between gap-2">
-            <span className="text-slate-400">Items in window</span>
+            <span className="text-muted">Items in window</span>
             <span className="tabular font-medium">{volume.toLocaleString('en-IN')}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-slate-400">Active topics</span>
+            <span className="text-muted">Active topics</span>
             <span className="tabular font-medium">{topicCount}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-slate-400">API</span>
+            <span className="text-muted">API</span>
             <span className="truncate font-medium">{apiStatus}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-slate-400">Socket</span>
+            <span className="text-muted">Socket</span>
             <span className="truncate font-medium">{wsStatus}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-slate-400">GoEmotions</span>
-            <span className={`font-medium ${modelOn ? 'text-emerald-400' : 'text-slate-400'}`}>
+            <span className="text-muted">GoEmotions</span>
+            <span className={`font-medium ${modelOn ? 'text-good' : 'text-muted'}`}>
               {modelOn ? 'connected' : 'offline'}
             </span>
           </div>
@@ -212,15 +210,15 @@ export function Sidebar({
         <button
           type="button"
           onClick={onTogglePreview}
-          className="mt-3 w-full rounded-2xl border border-white/10 px-3 py-2 text-[12px] font-medium text-slate-100 hover:bg-white/10"
+          className="mt-3 w-full rounded-2xl border border-line bg-surface px-3 py-2 text-[12px] font-medium text-ink hover:bg-inset"
         >
           {preferPrototype ? 'Using preview data' : 'Force preview data'}
         </button>
       </div>
 
-      <div className="border-t border-white/10 px-4 py-3">
+      <div className="border-t border-line px-4 py-3">
         <p className="text-[13px] font-medium">Analyst workspace</p>
-        <p className="text-[11px] text-slate-500">Local console · not production auth</p>
+        <p className="text-[11px] text-muted">Local console · not production auth</p>
       </div>
     </aside>
   )

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
+import { useChartColors, useTheme } from '../lib/theme'
 import type { NetworkGraphResponse } from '../types/contracts'
 
 const MAX_NODES = 200
@@ -37,6 +38,8 @@ export function emotionColor(community: string): string {
 export function NetworkCanvas({ data }: { data: NetworkGraphResponse }) {
   const wrap = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 520, height: 300 })
+  const { theme } = useTheme()
+  const colors = useChartColors()
 
   useEffect(() => {
     const node = wrap.current
@@ -102,15 +105,16 @@ export function NetworkCanvas({ data }: { data: NetworkGraphResponse }) {
           </span>
         ))}
       </div>
-      <div ref={wrap} className="h-[300px] w-full overflow-hidden rounded-2xl bg-slate-50">
+      <div ref={wrap} className="h-[300px] w-full overflow-hidden rounded-2xl bg-inset">
         <ForceGraph2D
+          key={theme}
           width={size.width}
           height={size.height}
-          backgroundColor="#f8fafc"
+          backgroundColor={colors.canvas}
           graphData={graphData}
           nodeLabel="handle"
           nodeVal="val"
-          linkColor={() => 'rgba(15,23,42,0.18)'}
+          linkColor={() => colors.link}
           linkWidth={1.2}
           cooldownTicks={48}
           d3VelocityDecay={0.35}
@@ -124,13 +128,13 @@ export function NetworkCanvas({ data }: { data: NetworkGraphResponse }) {
             ctx.arc(x, y, radius, 0, 2 * Math.PI)
             ctx.fillStyle = typeof node.color === 'string' ? node.color : '#1e3a8a'
             ctx.fill()
-            ctx.strokeStyle = '#ffffff'
+            ctx.strokeStyle = colors.nodeStroke
             ctx.lineWidth = 1.4
             ctx.stroke()
             const handle = typeof node.handle === 'string' ? node.handle : ''
             if (handle) {
               ctx.font = `${Math.max(9, 11 / Math.max(scale, 0.7))}px Inter, sans-serif`
-              ctx.fillStyle = '#0f172a'
+              ctx.fillStyle = colors.ink
               ctx.textAlign = 'center'
               ctx.fillText(handle, x, y + radius + 10 / Math.max(scale, 0.7))
             }

@@ -14,7 +14,7 @@ export function TrendingList({
         <li key={topic.topic_id}>
           <button
             type="button"
-            className="w-full rounded-2xl border border-transparent px-2 py-2 text-left hover:border-line hover:bg-slate-50"
+            className="w-full rounded-2xl border border-transparent px-2 py-2 text-left hover:border-line hover:bg-inset"
             onClick={() => onSelect?.(topic.topic_name)}
           >
             <div className="flex items-baseline justify-between gap-3">
@@ -26,7 +26,7 @@ export function TrendingList({
                 {topic.velocity.toFixed(2)} · n {topic.sample_size}
               </span>
             </div>
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-line">
               <div
                 className="h-full rounded-full bg-accent"
                 style={{ width: `${(topic.velocity / peak) * 100}%` }}
