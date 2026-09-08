@@ -4,15 +4,28 @@ import type { NetworkGraphResponse } from '../types/contracts'
 
 const MAX_NODES = 200
 
-const COMMUNITY_COLORS: Record<string, string> = {
-  civic: '#3d3ce0',
-  infra: '#0f7a5a',
-  weather: '#9a6700',
+const EMOTION_COLORS: Record<string, string> = {
+  fear: '#f97316',
+  anger: '#dc2626',
+  annoyance: '#ea580c',
+  approval: '#1e3a8a',
+  optimism: '#0f766e',
+  relief: '#c2410c',
+  sadness: '#2563eb',
+  caring: '#0369a1',
+  gratitude: '#15803d',
+  nervousness: '#a16207',
+  realization: '#334155',
+  disappointment: '#7c3aed',
+  curiosity: '#0e7490',
+  neutral: '#64748b',
+  joy: '#ca8a04',
 }
 
-function communityColor(community: string): string {
-  if (community in COMMUNITY_COLORS) {
-    return COMMUNITY_COLORS[community]
+export function emotionColor(community: string): string {
+  const key = community.toLowerCase()
+  if (key in EMOTION_COLORS) {
+    return EMOTION_COLORS[key]
   }
   let hash = 0
   for (let i = 0; i < community.length; i += 1) {
@@ -23,7 +36,7 @@ function communityColor(community: string): string {
 
 export function NetworkCanvas({ data }: { data: NetworkGraphResponse }) {
   const wrap = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState({ width: 520, height: 280 })
+  const [size, setSize] = useState({ width: 520, height: 300 })
 
   useEffect(() => {
     const node = wrap.current
@@ -31,7 +44,7 @@ export function NetworkCanvas({ data }: { data: NetworkGraphResponse }) {
       return
     }
     const update = (): void => {
-      setSize({ width: node.clientWidth, height: Math.max(node.clientHeight, 280) })
+      setSize({ width: node.clientWidth, height: Math.max(node.clientHeight, 300) })
     }
     update()
     const observer = new ResizeObserver(update)
@@ -41,6 +54,7 @@ export function NetworkCanvas({ data }: { data: NetworkGraphResponse }) {
     }
   }, [])
 
+  const truncated = data.nodes.length > MAX_NODES
   const graphData = useMemo(() => {
     const nodes = data.nodes.slice(0, MAX_NODES)
     const allowed = new Set(nodes.map((item) => item.id))
@@ -51,7 +65,7 @@ export function NetworkCanvas({ data }: { data: NetworkGraphResponse }) {
         pagerank: node.pagerank,
         community: node.community,
         val: Math.max(node.pagerank, 0.001) * 140,
-        color: communityColor(node.community),
+        color: emotionColor(node.community),
       })),
       links: data.links
         .filter((link) => allowed.has(link.source) && allowed.has(link.target))
@@ -63,48 +77,66 @@ export function NetworkCanvas({ data }: { data: NetworkGraphResponse }) {
     }
   }, [data])
 
-  if (data.nodes.length > MAX_NODES) {
-    return (
-      <p className="text-sm text-muted">
-        Graph truncated at {MAX_NODES} nodes for canvas performance.
-      </p>
-    )
-  }
+  const legend = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const node of graphData.nodes) {
+      if (!seen.has(node.community)) {
+        seen.set(node.community, node.color)
+      }
+    }
+    return [...seen.entries()].slice(0, 8)
+  }, [graphData.nodes])
 
   return (
-    <div ref={wrap} className="h-[280px] w-full overflow-hidden rounded-xl bg-[#f7f4ee]">
-      <ForceGraph2D
-        width={size.width}
-        height={size.height}
-        backgroundColor="#f7f4ee"
-        graphData={graphData}
-        nodeLabel="handle"
-        nodeVal="val"
-        linkColor={() => 'rgba(20,20,19,0.18)'}
-        linkWidth={1}
-        cooldownTicks={48}
-        d3VelocityDecay={0.35}
-        enableNodeDrag
-        nodeCanvasObject={(node, ctx, scale) => {
-          const x = node.x ?? 0
-          const y = node.y ?? 0
-          const rank = typeof node.pagerank === 'number' ? node.pagerank : 0.04
-          const radius = Math.max(3.5, rank * 28)
-          ctx.beginPath()
-          ctx.arc(x, y, radius, 0, 2 * Math.PI)
-          ctx.fillStyle = typeof node.color === 'string' ? node.color : '#3d3ce0'
-          ctx.fill()
-          ctx.strokeStyle = '#fffcf7'
-          ctx.lineWidth = 1.2
-          ctx.stroke()
-          if (scale > 1.4 && typeof node.handle === 'string') {
-            ctx.font = `${11 / scale}px Inter, sans-serif`
-            ctx.fillStyle = '#141413'
-            ctx.textAlign = 'center'
-            ctx.fillText(node.handle, x, y + radius + 8 / scale)
-          }
-        }}
-      />
+    <div className="space-y-2">
+      {truncated ? (
+        <p className="text-[12px] text-muted">
+          Showing {MAX_NODES} of {data.nodes.length} people for canvas performance.
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {legend.map(([label, color]) => (
+          <span key={label} className="inline-flex items-center gap-1.5 text-[11px] capitalize text-muted">
+            <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+            {label}
+          </span>
+        ))}
+      </div>
+      <div ref={wrap} className="h-[300px] w-full overflow-hidden rounded-2xl bg-slate-50">
+        <ForceGraph2D
+          width={size.width}
+          height={size.height}
+          backgroundColor="#f8fafc"
+          graphData={graphData}
+          nodeLabel="handle"
+          nodeVal="val"
+          linkColor={() => 'rgba(15,23,42,0.18)'}
+          linkWidth={1.2}
+          cooldownTicks={48}
+          d3VelocityDecay={0.35}
+          enableNodeDrag
+          nodeCanvasObject={(node, ctx, scale) => {
+            const x = node.x ?? 0
+            const y = node.y ?? 0
+            const rank = typeof node.pagerank === 'number' ? node.pagerank : 0.04
+            const radius = Math.max(4, rank * 32)
+            ctx.beginPath()
+            ctx.arc(x, y, radius, 0, 2 * Math.PI)
+            ctx.fillStyle = typeof node.color === 'string' ? node.color : '#1e3a8a'
+            ctx.fill()
+            ctx.strokeStyle = '#ffffff'
+            ctx.lineWidth = 1.4
+            ctx.stroke()
+            const handle = typeof node.handle === 'string' ? node.handle : ''
+            if (handle) {
+              ctx.font = `${Math.max(9, 11 / Math.max(scale, 0.7))}px Inter, sans-serif`
+              ctx.fillStyle = '#0f172a'
+              ctx.textAlign = 'center'
+              ctx.fillText(handle, x, y + radius + 10 / Math.max(scale, 0.7))
+            }
+          }}
+        />
+      </div>
     </div>
   )
 }

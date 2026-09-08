@@ -29,8 +29,11 @@ export type WsHandlers = {
 
 export class DashboardSocket {
   private socket: WebSocket | null = null
+  private readonly handlers: WsHandlers
 
-  constructor(private readonly handlers: WsHandlers) {}
+  constructor(handlers: WsHandlers) {
+    this.handlers = handlers
+  }
 
   connect(): void {
     this.disconnect()

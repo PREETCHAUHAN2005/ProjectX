@@ -47,6 +47,10 @@ class Analytics(BaseModel):
     topic_id: str | None = None
     topic_name: str | None = None
     demographics: Demographics | None = None
+    # IMPLEMENTATION extras for demo threads (not confirmed Mongo fields).
+    thread_role: Literal["post", "comment"] | None = None
+    in_reply_to: str | None = None
+    severity: str | None = None
 
 
 class Engagement(BaseModel):

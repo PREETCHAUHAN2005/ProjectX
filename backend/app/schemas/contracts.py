@@ -20,6 +20,7 @@ class TimelineQuery(BaseModel):
     to_ts: str | None = Field(default=None, alias="to")
     bucket: BucketSize = "hour"
     topic: str | None = None
+    severity: str | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -29,6 +30,9 @@ class TimelineBucket(BaseModel):
     count: int
     average_sentiment: float
     top_emotions: list[EmotionScore]
+    # IMPLEMENTATION: split volume so the dashboard can chart posts vs comments.
+    post_count: int = 0
+    comment_count: int = 0
 
 
 class TimelineResponse(BaseModel):
@@ -39,6 +43,7 @@ class NetworkGraphQuery(BaseModel):
     min_centrality: float | None = None
     min_weight: float | None = None
     topic: str | None = None
+    severity: str | None = None
 
 
 class GraphNode(BaseModel):
@@ -104,6 +109,14 @@ class NewPostPayload(BaseModel):
     timestamp: str
     author: Author
     content: PostContent
+    # IMPLEMENTATION extras for the demo dashboard (not source-confirmed WS fields).
+    topic_id: str | None = None
+    topic_name: str | None = None
+    severity: str | None = None
+    thread_role: str | None = None
+    in_reply_to: str | None = None
+    polarity: Polarity | None = None
+    emotions: list[EmotionScore] | None = None
 
 
 class TrendSpikePayload(BaseModel):

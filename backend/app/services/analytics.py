@@ -47,6 +47,7 @@ class AnalyticsService:
             topic=query.topic,
             from_ts=query.from_ts,
             to_ts=query.to_ts,
+            severity=query.severity,
         )
         grouped: dict[str, list[dict]] = defaultdict(list)
         for post in posts:
@@ -62,12 +63,19 @@ class AnalyticsService:
             scores = []
             emotion_sums: dict[str, float] = defaultdict(float)
             emotion_n: dict[str, int] = defaultdict(int)
+            post_count = 0
+            comment_count = 0
             for post in rows:
                 analytics = post.get("analytics") or {}
                 sentiment = analytics.get("sentiment") or {}
                 label = sentiment.get("label")
                 if label in POLARITY_TO_NUMBER:
                     scores.append(POLARITY_TO_NUMBER[label])
+                role = str(analytics.get("thread_role") or "post")
+                if role == "comment":
+                    comment_count += 1
+                else:
+                    post_count += 1
                 for emotion in analytics.get("emotions") or []:
                     name = str(emotion.get("label") or "")
                     if not name:
@@ -85,6 +93,8 @@ class AnalyticsService:
                     count=len(rows),
                     average_sentiment=(sum(scores) / len(scores)) if scores else 0.0,
                     top_emotions=averaged[:3],
+                    post_count=post_count,
+                    comment_count=comment_count,
                 )
             )
         return TimelineResponse(buckets=buckets)
@@ -94,9 +104,10 @@ class AnalyticsService:
             min_centrality=query.min_centrality,
             min_weight=query.min_weight,
         )
-        if query.topic:
-            topic = query.topic
-            posts = get_post_store().list_posts(topic=topic)
+        if query.topic or query.severity:
+            posts = get_post_store().list_posts(
+                topic=query.topic, severity=query.severity
+            )
             allowed = {
                 str((post.get("author") or {}).get("user_id") or "") for post in posts
             }
@@ -109,8 +120,8 @@ class AnalyticsService:
             ]
         return NetworkGraphResponse(nodes=nodes, links=links)
 
-    def demographics(self, topic: str | None) -> DemographicsResponse:
-        posts = get_post_store().list_posts(topic=topic)
+    def demographics(self, topic: str | None, severity: str | None = None) -> DemographicsResponse:
+        posts = get_post_store().list_posts(topic=topic, severity=severity)
 
         def tally(field: str) -> list[DemographicSlice]:
             counts: dict[str, int] = defaultdict(int)

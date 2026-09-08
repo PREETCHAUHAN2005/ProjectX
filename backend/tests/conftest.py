@@ -1,54 +1,22 @@
+import os
+
+os.environ["DEMO_SEED"] = "false"
+
 import pytest
 
-from app.services.ingest import persist_analyzed_post
+from app.services.demo_seed import reset_demo_seed_state
+from app.services.ingest import persist_analyzed_post, reset_ingest_emit_state
 from app.stores.graph import reset_graph_store_for_tests
 from app.stores.posts import reset_post_store_for_tests
+from tests.factories import make_post
 
 
 @pytest.fixture(autouse=True)
 def _clean_stores() -> None:
     reset_post_store_for_tests()
     reset_graph_store_for_tests()
-
-
-def make_post(
-    *,
-    external_id: str,
-    timestamp: str,
-    polarity: str,
-    topic: str | None = "elections",
-    country: str | None = "IN",
-    language: str | None = "en",
-    profession: str | None = "journalist",
-    handle: str = "alice",
-    user_id: str = "u1",
-    text: str = "hello @bob",
-    joy: float = 0.8,
-) -> dict:
-    return {
-        "platform": "telegram",
-        "external_id": external_id,
-        "timestamp": timestamp,
-        "author": {"user_id": user_id, "handle": handle},
-        "content": {"raw_text": text, "clean_text": text, "language": language},
-        "analytics": {
-            "sentiment": {"label": polarity, "score": 0.8},
-            "emotions": [
-                {"label": "joy", "score": joy},
-                {"label": "anger", "score": 0.1},
-                {"label": "neutral", "score": 0.1},
-            ],
-            "topic_id": topic,
-            "topic_name": topic,
-            "demographics": {
-                "inferred_country": country,
-                "inferred_region": None,
-                "inferred_profession": profession,
-                "confidence": 0.5,
-            },
-        },
-        "engagement": {},
-    }
+    reset_demo_seed_state()
+    reset_ingest_emit_state()
 
 
 def test_timeline_aggregates_polarity_and_top_emotions() -> None:

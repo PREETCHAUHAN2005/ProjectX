@@ -10,6 +10,21 @@ import type {
 } from '../types/contracts'
 import { apiBaseUrl } from './config'
 
+/** Convert datetime-local values to ISO so REST time filters compare correctly. */
+export function toIsoParam(value?: string): string | undefined {
+  if (!value) {
+    return undefined
+  }
+  if (/[zZ]$/.test(value) || /[+-]\d{2}:\d{2}$/.test(value)) {
+    return value
+  }
+  const parsed = Date.parse(value)
+  if (Number.isNaN(parsed)) {
+    return undefined
+  }
+  return new Date(parsed).toISOString()
+}
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -63,10 +78,11 @@ export function getHealth(): Promise<HealthResponse> {
 export function getTimeline(query: TimelineQuery = {}): Promise<TimelineResponse> {
   return getJson<TimelineResponse>(
     `/api/v1/analytics/timeline${queryString({
-      from: query.from,
-      to: query.to,
+      from: toIsoParam(query.from),
+      to: toIsoParam(query.to),
       bucket: query.bucket,
       topic: query.topic,
+      severity: query.severity,
     })}`,
   )
 }
@@ -79,13 +95,17 @@ export function getNetworkGraph(
       min_centrality: query.min_centrality,
       min_weight: query.min_weight,
       topic: query.topic,
+      severity: query.severity,
     })}`,
   )
 }
 
-export function getDemographics(topic?: string): Promise<DemographicsResponse> {
+export function getDemographics(
+  topic?: string,
+  severity?: string,
+): Promise<DemographicsResponse> {
   return getJson<DemographicsResponse>(
-    `/api/v1/analytics/demographics${queryString({ topic })}`,
+    `/api/v1/analytics/demographics${queryString({ topic, severity })}`,
   )
 }
 

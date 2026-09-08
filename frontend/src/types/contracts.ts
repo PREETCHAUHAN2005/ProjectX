@@ -20,6 +20,7 @@ export interface TimelineQuery {
   to?: string
   bucket?: 'hour' | 'day'
   topic?: string
+  severity?: string
 }
 
 export interface TimelineBucket {
@@ -27,6 +28,9 @@ export interface TimelineBucket {
   count: number
   average_sentiment: number
   top_emotions: EmotionScore[]
+  /** IMPLEMENTATION split of `count` for posts vs comments. */
+  post_count?: number
+  comment_count?: number
 }
 
 export interface TimelineResponse {
@@ -38,6 +42,7 @@ export interface NetworkGraphQuery {
   min_centrality?: number
   min_weight?: number
   topic?: string
+  severity?: string
 }
 
 export interface GraphNode {
@@ -101,6 +106,14 @@ export interface NewPostPayload {
     hashtags?: string[]
     language?: string
   }
+  /** IMPLEMENTATION extras for the demo live feed (not source-confirmed). */
+  topic_id?: string
+  topic_name?: string
+  severity?: string
+  thread_role?: 'post' | 'comment' | string
+  in_reply_to?: string
+  polarity?: Polarity
+  emotions?: EmotionScore[]
 }
 
 export interface TrendSpikePayload {
