@@ -3,6 +3,7 @@ export function apiBaseUrl(): string {
   if (typeof fromEnv === 'string' && fromEnv.length > 0) {
     return fromEnv.replace(/\/$/, '')
   }
+  // Relative URLs go through the Vite proxy in local demo (same origin).
   return ''
 }
 

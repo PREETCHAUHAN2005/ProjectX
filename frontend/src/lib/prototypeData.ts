@@ -9,7 +9,7 @@ import type {
 } from '../types/contracts'
 
 export const PROTOTYPE_NOTICE =
-  'Preview data — the API is unreachable. Start the FastAPI server with DEMO_SEED=true for the live demo.'
+  'Preview data is on. Turn it off to use the live FastAPI analytics and WebSocket feed.'
 
 const hoursAgoIso = (hours: number): string =>
   new Date(Date.now() - hours * 3600 * 1000).toISOString()

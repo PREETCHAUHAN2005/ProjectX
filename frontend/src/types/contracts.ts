@@ -96,26 +96,6 @@ export interface Author {
   follower_count?: number
 }
 
-export interface NewPostPayload {
-  platform: Platform
-  external_id: string
-  timestamp: string
-  author: Author
-  content: {
-    raw_text: string
-    hashtags?: string[]
-    language?: string
-  }
-  /** IMPLEMENTATION extras for the demo live feed (not source-confirmed). */
-  topic_id?: string
-  topic_name?: string
-  severity?: string
-  thread_role?: 'post' | 'comment' | string
-  in_reply_to?: string
-  polarity?: Polarity
-  emotions?: EmotionScore[]
-}
-
 export interface TrendSpikePayload {
   topic_id: string
   topic_name: string
@@ -152,6 +132,57 @@ export interface WsFilterCriteria {
 
 export interface HealthResponse {
   status: string
+  posts?: number
+  emotion_backend?: string
+  demo_mode?: boolean
+  ingest_source?: string
+  websocket_clients?: number
+}
+
+export interface FeedAnalytics {
+  sentiment?: {
+    label: Polarity
+    score: number
+  }
+  emotions?: EmotionScore[]
+  topic_id?: string | null
+  topic_name?: string | null
+}
+
+export interface NewPostPayload {
+  platform: Platform
+  external_id: string
+  timestamp: string
+  author: Author
+  content: {
+    raw_text: string
+    hashtags?: string[]
+    language?: string
+  }
+  topic_id?: string
+  topic_name?: string | null
+  severity?: string | null
+  thread_role?: 'post' | 'comment' | string
+  in_reply_to?: string
+  polarity?: Polarity
+  emotions?: EmotionScore[]
+  analytics?: FeedAnalytics
+}
+
+export interface RecentFeedResponse {
+  posts: NewPostPayload[]
+}
+
+export interface IngestResponse {
+  accepted: number
+  source: string
+  query?: string | null
+}
+
+export interface NlpPredictResponse {
+  emotions: EmotionScore[]
+  polarity: Polarity
+  backend: string
 }
 
 export interface ApiErrorBody {

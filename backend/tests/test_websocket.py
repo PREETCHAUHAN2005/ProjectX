@@ -6,11 +6,11 @@ from app.ws.gateway import hub
 
 
 def test_websocket_accepts_connection_and_ignores_malformed() -> None:
-    client = TestClient(app)
-    with client.websocket_connect("/ws") as websocket:
-        websocket.send_text("not-json")
-        websocket.send_json({"type": "filter", "topic": "elections", "severity": "high"})
-        websocket.send_json({"nope": True})
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as websocket:
+            websocket.send_text("not-json")
+            websocket.send_json({"type": "filter", "topic": "elections", "severity": "high"})
+            websocket.send_json({"nope": True})
 
 
 def test_websocket_broadcast_new_post() -> None:

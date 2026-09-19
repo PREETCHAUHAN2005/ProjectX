@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { predictNlp } from '../api/client'
 import {
+  bucketForLabel,
   isModelConfigured,
   predictEmotions,
   previewEmotions,
@@ -18,6 +20,20 @@ export function EmotionModelPanel() {
   async function run(): Promise<void> {
     setBusy(true)
     try {
+      try {
+        const local = await predictNlp(text)
+        setRows(
+          local.emotions.slice(0, 8).map((row) => ({
+            label: row.label,
+            score: row.score,
+            bucket: bucketForLabel(row.label),
+          })),
+        )
+        setMode('live')
+        return
+      } catch {
+        // fall through to optional Colab URL
+      }
       const remote = await predictEmotions(text)
       if (remote === null) {
         setRows(previewEmotions(text).slice(0, 8))
@@ -39,9 +55,8 @@ export function EmotionModelPanel() {
   return (
     <div className="space-y-3">
       <p className="text-[13px] leading-5 text-muted">
-        {connected
-          ? 'Colab / FastAPI model is configured (`VITE_MODEL_URL`).'
-          : 'Model offline — preview mapping only. Set VITE_MODEL_URL after Colab export.'}
+        Scores the 28 GoEmotions labels through the local FastAPI pipeline
+        {connected ? ' (Colab URL also configured).' : '.'}
         {mode === 'error' ? ' Last call failed; showing preview.' : ''}
       </p>
       <textarea
@@ -60,7 +75,7 @@ export function EmotionModelPanel() {
         }}
         className="rounded-full bg-accent px-4 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
       >
-        {busy ? 'Scoring…' : connected ? 'Run model' : 'Preview scores'}
+        {busy ? 'Scoring…' : 'Run pipeline'}
       </button>
       <ul className="space-y-1.5">
         {rows.map((row) => (

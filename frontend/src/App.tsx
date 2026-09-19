@@ -24,9 +24,10 @@ function StatusChip({
 }) {
   const color =
     tone === 'live' ? 'bg-good' : tone === 'warn' ? 'bg-bad' : 'bg-warn'
+  const pulse = tone === 'live' ? 'live-dot' : ''
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-inset px-2.5 py-1 text-[11px] font-medium text-ink">
-      <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${color} ${pulse}`} />
       {label}
     </span>
   )
@@ -37,6 +38,8 @@ export default function App() {
   const [section, setSection] = useState<SidebarSection>('overview')
   const field =
     'mt-1 w-full rounded-2xl border border-line bg-inset px-3 py-2 text-[13px] text-ink outline-none focus:border-accent'
+  const live = dashboard.dataMode === 'live'
+  const ingestSource = dashboard.health?.ingest_source ?? 'idle'
 
   function goTo(id: SidebarSection): void {
     setSection(id)
@@ -55,6 +58,8 @@ export default function App() {
           volume={dashboard.metrics.posts + dashboard.metrics.comments}
           topicCount={dashboard.metrics.topics}
           preferPrototype={dashboard.preferPrototype}
+          ingestSource={ingestSource}
+          emotionBackend={dashboard.health?.emotion_backend}
           onTogglePreview={() => {
             dashboard.setPreferPrototype(!dashboard.preferPrototype)
           }}
@@ -87,19 +92,53 @@ export default function App() {
             <div className="flex flex-wrap items-center gap-2">
               <StatusChip
                 label={`API ${dashboard.apiStatus}`}
-                tone={dashboard.dataMode === 'live' ? 'live' : 'preview'}
+                tone={live ? 'live' : dashboard.dataMode === 'offline' ? 'warn' : 'preview'}
               />
               <StatusChip
                 label={`WS ${dashboard.wsStatus}`}
                 tone={dashboard.wsStatus === 'connected' ? 'live' : 'preview'}
               />
+              <button
+                type="button"
+                onClick={() => {
+                  void dashboard.fetchPosts()
+                }}
+                disabled={dashboard.fetching || dashboard.preferPrototype}
+                className="rounded-full bg-ink px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-40"
+              >
+                {dashboard.fetching ? 'Fetching…' : 'Fetch posts'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void dashboard.reload()
+                }}
+                className="rounded-full border border-line px-3 py-1.5 text-[12px] font-medium"
+              >
+                Retry
+              </button>
               <ThemeToggle />
             </div>
           </header>
 
+          {dashboard.dataMode === 'offline' ? (
+            <p className="border-b border-line bg-bad-soft px-5 py-2 text-[12px] text-ink lg:px-8">
+              FastAPI is not reachable on this machine. From the repo root run
+              {' '}
+              <code>scripts/start-local.ps1</code>
+              , then click Retry. Preview data is optional and is not the live demo.
+            </p>
+          ) : null}
+
           {dashboard.dataMode === 'prototype' ? (
             <p className="border-b border-line bg-accent-soft px-5 py-2 text-[12px] text-ink lg:px-8">
               {PROTOTYPE_NOTICE}
+            </p>
+          ) : null}
+
+          {dashboard.fetchNotice ? (
+            <p className="border-b border-line bg-good-soft px-5 py-2 text-[12px] text-ink lg:px-8">
+              {dashboard.fetchNotice}
             </p>
           ) : null}
 
@@ -270,7 +309,9 @@ export default function App() {
                 className="scroll-mt-4 rounded-[20px] border border-line bg-surface p-5 text-ink card-shadow"
               >
                 <h2 className="mb-1 text-[15px] font-bold">Live feed</h2>
-                <p className="mb-4 text-[12px] text-muted">Posts and comments · event:new_post</p>
+                <p className="mb-4 text-[12px] text-muted">
+                  Posts and comments · event:new_post · analyzed polarity
+                </p>
                 <LiveFeed posts={dashboard.feed} />
               </section>
               <section
@@ -279,7 +320,7 @@ export default function App() {
               >
                 <h2 className="mb-1 text-[15px] font-bold">Emotion model</h2>
                 <p className="mb-3 text-[13px] leading-5 text-muted">
-                  Score a post with GoEmotions (Colab slot or preview)
+                  Same GoEmotions label space as the ingest pipeline
                 </p>
                 <EmotionModelPanel />
               </section>

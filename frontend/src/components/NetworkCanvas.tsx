@@ -90,6 +90,10 @@ export function NetworkCanvas({ data }: { data: NetworkGraphResponse }) {
     return [...seen.entries()].slice(0, 8)
   }, [graphData.nodes])
 
+  if (data.nodes.length === 0) {
+    return <p className="text-sm text-muted">No graph nodes for this window.</p>
+  }
+
   return (
     <div className="space-y-2">
       {truncated ? (

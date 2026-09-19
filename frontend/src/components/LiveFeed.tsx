@@ -1,21 +1,14 @@
 import { relativeTime } from '../lib/format'
-import type { NewPostPayload } from '../types/contracts'
+import type { NewPostPayload, Polarity } from '../types/contracts'
 
-function dominantEmotion(post: NewPostPayload): string | null {
-  if (!post.emotions || post.emotions.length === 0) {
-    return null
-  }
-  return [...post.emotions].sort((a, b) => b.score - a.score)[0]?.label ?? null
-}
-
-function polarityClass(polarity: string): string {
-  if (polarity === 'POSITIVE') {
+function polarityClass(label: Polarity | string | undefined): string {
+  if (label === 'POSITIVE') {
     return 'bg-good-soft text-good'
   }
-  if (polarity === 'NEGATIVE') {
+  if (label === 'NEGATIVE') {
     return 'bg-bad-soft text-bad'
   }
-  return 'bg-surface text-muted ring-1 ring-line'
+  return 'bg-[#eeeae2] text-muted'
 }
 
 export function LiveFeed({ posts }: { posts: NewPostPayload[] }) {
@@ -27,7 +20,11 @@ export function LiveFeed({ posts }: { posts: NewPostPayload[] }) {
     <ul className="max-h-[420px] space-y-2.5 overflow-y-auto pr-1">
       {posts.map((post) => {
         const role = post.thread_role === 'comment' ? 'Comment' : 'Post'
-        const emotion = dominantEmotion(post)
+        const sentiment = post.polarity || post.analytics?.sentiment?.label
+        const emotion =
+          post.emotions?.[0] ||
+          post.analytics?.emotions?.[0]
+        const topic = post.topic_name || post.analytics?.topic_name
         return (
           <li
             key={`${post.platform}:${post.external_id}`}
@@ -50,14 +47,19 @@ export function LiveFeed({ posts }: { posts: NewPostPayload[] }) {
             </div>
             <p className="text-[13px] leading-5 text-ink">{post.content.raw_text}</p>
             <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-              {emotion ? (
-                <span className="rounded-full bg-surface px-2 py-0.5 capitalize text-muted ring-1 ring-line">
-                  {emotion}
+              {sentiment ? (
+                <span className={`rounded-full px-2 py-0.5 ${polarityClass(sentiment)}`}>
+                  {sentiment}
                 </span>
               ) : null}
-              {post.polarity ? (
-                <span className={`rounded-full px-2 py-0.5 ${polarityClass(post.polarity)}`}>
-                  {post.polarity}
+              {emotion ? (
+                <span className="rounded-full bg-surface px-2 py-0.5 capitalize text-muted ring-1 ring-line">
+                  {emotion.label} {emotion.score.toFixed(2)}
+                </span>
+              ) : null}
+              {topic ? (
+                <span className="rounded-full border border-line px-2 py-0.5 text-[10px] text-muted">
+                  {topic}
                 </span>
               ) : null}
               {post.content.hashtags?.map((tag) => (

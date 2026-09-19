@@ -118,3 +118,22 @@ class InferencePipeline:
                 views=post.engagement.views,
             ),
         )
+
+
+def build_pipeline(*, emotion_backend: str = "lexicon") -> InferencePipeline:
+    """Factory for the FastAPI demo runtime and optional worker processes."""
+    from workers.inference.go_emotions import HuggingFaceGoEmotions
+    from workers.inference.heuristic_ner import HeuristicNerProfiler
+    from workers.inference.keyword_topics import KeywordTopicClusterer
+    from workers.inference.lexicon_emotions import LexiconEmotionInferencer
+
+    backend = (emotion_backend or "lexicon").strip().lower()
+    if backend == "huggingface":
+        inferencer = HuggingFaceGoEmotions()
+    else:
+        inferencer = LexiconEmotionInferencer()
+    return InferencePipeline(
+        inferencer=inferencer,
+        topic_clusterer=KeywordTopicClusterer(),
+        ner_profiler=HeuristicNerProfiler(),
+    )

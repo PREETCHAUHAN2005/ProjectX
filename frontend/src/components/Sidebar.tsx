@@ -105,6 +105,8 @@ export function Sidebar({
   topicCount,
   onTogglePreview,
   preferPrototype,
+  ingestSource = 'idle',
+  emotionBackend,
 }: {
   active: SidebarSection
   onNavigate: (id: SidebarSection) => void
@@ -115,8 +117,10 @@ export function Sidebar({
   topicCount: number
   onTogglePreview: () => void
   preferPrototype: boolean
+  ingestSource?: string
+  emotionBackend?: string
 }) {
-  const modelOn = isModelConfigured()
+  const modelOn = isModelConfigured() || dataMode === 'live'
   const live = dataMode === 'live'
 
   return (
@@ -170,12 +174,14 @@ export function Sidebar({
           <li className="flex items-center justify-between rounded-2xl bg-inset px-3 py-2 text-[12px]">
             <span>Telegram</span>
             <span className={`font-medium ${live ? 'text-good' : 'text-warn'}`}>
-              {live ? 'live' : 'preview'}
+              {live ? 'live' : dataMode === 'offline' ? 'offline' : 'preview'}
             </span>
           </li>
           <li className="flex items-center justify-between rounded-2xl bg-inset px-3 py-2 text-[12px]">
             <span>X / Twitter</span>
-            <span className="font-medium text-muted">adapter</span>
+            <span className={`font-medium ${live ? 'text-good' : 'text-muted'}`}>
+              {live ? ingestSource : 'adapter'}
+            </span>
           </li>
         </ul>
 
@@ -202,7 +208,7 @@ export function Sidebar({
           <div className="flex justify-between gap-2">
             <span className="text-muted">GoEmotions</span>
             <span className={`font-medium ${modelOn ? 'text-good' : 'text-muted'}`}>
-              {modelOn ? 'connected' : 'offline'}
+              {emotionBackend || (modelOn ? 'connected' : 'offline')}
             </span>
           </div>
         </div>

@@ -2,8 +2,11 @@ import type {
   ApiErrorBody,
   DemographicsResponse,
   HealthResponse,
+  IngestResponse,
   NetworkGraphQuery,
   NetworkGraphResponse,
+  NlpPredictResponse,
+  RecentFeedResponse,
   TimelineQuery,
   TimelineResponse,
   TrendingResponse,
@@ -47,27 +50,58 @@ function queryString(params: Record<string, string | number | undefined>): strin
   return encoded.length > 0 ? `?${encoded}` : ''
 }
 
+async function parseError(response: Response): Promise<string> {
+  let detail = `Request failed (${response.status})`
+  try {
+    const body = (await response.json()) as ApiErrorBody
+    if (typeof body.detail === 'string' && body.detail.length > 0) {
+      detail = body.detail
+    }
+  } catch {
+    // keep generic detail; never surface stack traces
+  }
+  return detail
+}
+
+async function fetchWithTimeout(path: string, init?: RequestInit, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(`${apiBaseUrl()}${path}`, { ...init, signal: controller.signal })
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
 async function getJson<T>(path: string): Promise<T> {
   let response: Response
   try {
-    response = await fetch(`${apiBaseUrl()}${path}`)
-  } catch (cause) {
+    response = await fetchWithTimeout(path)
+  } catch {
     throw new ApiError(0, 'Network error contacting API')
   }
 
   if (!response.ok) {
-    let detail = `Request failed (${response.status})`
-    try {
-      const body = (await response.json()) as ApiErrorBody
-      if (typeof body.detail === 'string' && body.detail.length > 0) {
-        detail = body.detail
-      }
-    } catch {
-      // keep generic detail; never surface stack traces
-    }
-    throw new ApiError(response.status, detail)
+    throw new ApiError(response.status, await parseError(response))
   }
 
+  return (await response.json()) as T
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  let response: Response
+  try {
+    response = await fetchWithTimeout(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }, 20000)
+  } catch {
+    throw new ApiError(0, 'Network error contacting API')
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, await parseError(response))
+  }
   return (await response.json()) as T
 }
 
@@ -113,4 +147,18 @@ export function getTrending(limit?: number): Promise<TrendingResponse> {
   return getJson<TrendingResponse>(
     `/api/v1/topics/trending${queryString({ limit })}`,
   )
+}
+
+export function getRecentFeed(limit = 40): Promise<RecentFeedResponse> {
+  return getJson<RecentFeedResponse>(
+    `/api/v1/feed/recent${queryString({ limit })}`,
+  )
+}
+
+export function runIngest(query?: string, limit = 12): Promise<IngestResponse> {
+  return postJson<IngestResponse>('/api/v1/ingest/run', { query, limit })
+}
+
+export function predictNlp(text: string): Promise<NlpPredictResponse> {
+  return postJson<NlpPredictResponse>('/api/v1/nlp/predict', { text })
 }

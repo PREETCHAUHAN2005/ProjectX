@@ -117,6 +117,7 @@ class NewPostPayload(BaseModel):
     in_reply_to: str | None = None
     polarity: Polarity | None = None
     emotions: list[EmotionScore] | None = None
+    analytics: dict | None = None
 
 
 class TrendSpikePayload(BaseModel):
@@ -149,3 +150,41 @@ class HealthResponse(BaseModel):
     """IMPLEMENTATION extra — not a confirmed product API."""
 
     status: str
+    posts: int = 0
+    emotion_backend: str = "unknown"
+    demo_mode: bool = False
+    ingest_source: str = "idle"
+    websocket_clients: int = 0
+
+
+class FeedPost(NewPostPayload):
+    """Recent-feed row. Analytics is an implementation extension of event:new_post."""
+
+    topic_name: str | None = None
+    severity: str | None = None
+    analytics: dict | None = None
+
+
+class RecentFeedResponse(BaseModel):
+    posts: list[FeedPost]
+
+
+class IngestRequest(BaseModel):
+    query: str | None = None
+    limit: int = Field(default=12, ge=1, le=50)
+
+
+class IngestResponse(BaseModel):
+    accepted: int
+    source: str
+    query: str | None = None
+
+
+class NlpPredictRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class NlpPredictResponse(BaseModel):
+    emotions: list[EmotionScore]
+    polarity: Polarity
+    backend: str

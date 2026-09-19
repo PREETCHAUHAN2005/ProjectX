@@ -1,31 +1,34 @@
+"""Native WebSocket gateway — no Socket.io.
+
+Confirmed event names: event:new_post | event:trend_spike | event:graph_delta
+Filter criteria JSON is not fully specified; this accepts a conservative subset.
+"""
+
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from pydantic import ValidationError
 
-from app.schemas.contracts import WsEnvelope, WsFilterCriteria
+from app.schemas.contracts import GraphDeltaPayload, NewPostPayload, TrendSpikePayload, WsEnvelope
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-EVENT_NAMES = frozenset(
-    {"event:new_post", "event:trend_spike", "event:graph_delta"}
-)
+REPLAY_LIMIT = 40
 
 
-def _parse_ts(value: str | None) -> datetime | None:
-    if not value:
+def _parse_ts(value: str) -> datetime | None:
+    text = (value or "").strip()
+    if not text:
         return None
-    text = str(value).replace("Z", "+00:00")
     try:
-        parsed = datetime.fromisoformat(text)
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
     if parsed.tzinfo is None:
@@ -33,100 +36,127 @@ def _parse_ts(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _matches_filters(envelope: dict[str, Any], filters: dict[str, Any]) -> bool:
+    event = envelope.get("event")
+    payload = envelope.get("payload") or {}
+    topic = filters.get("topic")
+    if topic:
+        if event == "event:new_post" and topic not in {
+            payload.get("topic_id"),
+            payload.get("topic_name"),
+        }:
+            return False
+        if event == "event:trend_spike" and topic not in {
+            payload.get("topic_id"),
+            payload.get("topic_name"),
+        }:
+            return False
+        if event == "event:graph_delta":
+            return False
+    severity = filters.get("severity")
+    if severity and event == "event:new_post" and payload.get("severity") != severity:
+        return False
+    window = filters.get("time_window") or {}
+    if event == "event:new_post" and (window.get("from") or window.get("to")):
+        stamp = _parse_ts(str(payload.get("timestamp") or ""))
+        start = _parse_ts(str(window.get("from") or ""))
+        end = _parse_ts(str(window.get("to") or ""))
+        if start is not None and (stamp is None or stamp < start):
+            return False
+        if end is not None and (stamp is None or stamp > end):
+            return False
+    return True
+
+
 class ConnectionHub:
     def __init__(self) -> None:
-        self._clients: dict[WebSocket, WsFilterCriteria] = {}
+        self._clients: dict[WebSocket, dict[str, Any]] = {}
+        self._replay: deque[dict[str, Any]] = deque(maxlen=REPLAY_LIMIT)
+
+    @property
+    def client_count(self) -> int:
+        return len(self._clients)
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
-        self._clients[websocket] = WsFilterCriteria(type="filter")
+        self._clients[websocket] = {}
+        for envelope in list(self._replay):
+            if _matches_filters(envelope, self._clients[websocket]):
+                await websocket.send_text(json.dumps(envelope))
 
     def disconnect(self, websocket: WebSocket) -> None:
         self._clients.pop(websocket, None)
 
-    def set_filter(self, websocket: WebSocket, criteria: WsFilterCriteria) -> None:
-        self._clients[websocket] = criteria
+    def set_filters(self, websocket: WebSocket, filters: dict[str, Any]) -> None:
+        if websocket in self._clients:
+            self._clients[websocket] = filters
 
-    def _matches(self, criteria: WsFilterCriteria, envelope: WsEnvelope) -> bool:
-        payload = envelope.payload
-        if criteria.topic:
-            payload_topic = payload.get("topic_name") or payload.get("topic")
-            if payload_topic and payload_topic != criteria.topic:
-                return False
-        if criteria.severity:
-            payload_severity = payload.get("severity")
-            if payload_severity and payload_severity != criteria.severity:
-                return False
-        window = criteria.time_window or {}
-        start = _parse_ts(window.get("from") if isinstance(window, dict) else None)
-        end = _parse_ts(window.get("to") if isinstance(window, dict) else None)
-        if start or end:
-            stamp = _parse_ts(str(payload.get("timestamp") or ""))
-            if stamp is not None:
-                if start and stamp < start:
-                    return False
-                if end and stamp > end:
-                    return False
-        return True
-
-    async def broadcast(self, envelope: WsEnvelope) -> None:
+    async def broadcast(self, envelope: dict[str, Any]) -> None:
+        self._replay.append(envelope)
         stale: list[WebSocket] = []
-        body = envelope.model_dump()
-        for websocket, criteria in self._clients.items():
-            if not self._matches(criteria, envelope):
+        for websocket, filters in self._clients.items():
+            if not _matches_filters(envelope, filters):
                 continue
             try:
-                await websocket.send_json(body)
+                await websocket.send_text(json.dumps(envelope))
             except Exception:
+                logger.exception("websocket send failed")
                 stale.append(websocket)
         for websocket in stale:
             self.disconnect(websocket)
+
+    def record(self, envelope: dict[str, Any] | WsEnvelope) -> None:
+        payload = envelope.model_dump() if isinstance(envelope, WsEnvelope) else envelope
+        self._replay.append(payload)
+
+    def reset_for_tests(self) -> None:
+        self._clients.clear()
+        self._replay.clear()
 
 
 hub = ConnectionHub()
 
 
-async def _replay_recent(websocket: WebSocket) -> None:
-    from app.services.ingest import document_to_new_post
-    from app.stores.posts import get_post_store
+def _validate_event(event: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if event == "event:new_post":
+        return NewPostPayload.model_validate(payload).model_dump()
+    if event == "event:trend_spike":
+        return TrendSpikePayload.model_validate(payload).model_dump()
+    if event == "event:graph_delta":
+        return GraphDeltaPayload.model_validate(payload).model_dump()
+    raise ValueError("unknown event")
 
-    posts = get_post_store().list_posts()
-    roots = [
-        row
-        for row in posts
-        if str((row.get("analytics") or {}).get("thread_role") or "post") != "comment"
-    ]
-    comments = [
-        row
-        for row in posts
-        if str((row.get("analytics") or {}).get("thread_role") or "post") == "comment"
-    ]
-    comment_budget = max(0, 40 - len(roots))
-    selected = [*roots, *comments[-comment_budget:]]
-    selected.sort(key=lambda row: str(row.get("timestamp") or ""))
-    for document in selected:
-        try:
-            payload = document_to_new_post(document).model_dump(exclude_none=True)
-            await websocket.send_json({"event": "event:new_post", "payload": payload})
-        except Exception:
-            logger.exception("Failed replaying seeded post on WebSocket connect")
+
+async def emit(event: str, payload: dict[str, Any]) -> None:
+    validated = _validate_event(event, payload)
+    envelope = WsEnvelope(event=event, payload=validated).model_dump()
+    await hub.broadcast(envelope)
 
 
 @router.websocket("/ws")
-async def websocket_gateway(websocket: WebSocket) -> None:
+async def websocket_endpoint(websocket: WebSocket) -> None:
     await hub.connect(websocket)
-    # Yield so the browser/Vite proxy attaches onmessage before catch-up frames.
-    await asyncio.sleep(0.25)
-    await _replay_recent(websocket)
     try:
         while True:
             raw = await websocket.receive_text()
             try:
-                data: Any = json.loads(raw)
-                criteria = WsFilterCriteria.model_validate(data)
-                hub.set_filter(websocket, criteria)
-            except (json.JSONDecodeError, ValidationError):
-                logger.warning("Ignoring malformed WebSocket client frame")
+                message = json.loads(raw)
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({"error": "invalid json"}))
                 continue
+            if not isinstance(message, dict) or message.get("type") != "filter":
+                await websocket.send_text(json.dumps({"error": "invalid frame"}))
+                continue
+            hub.set_filters(
+                websocket,
+                {
+                    "topic": message.get("topic"),
+                    "time_window": message.get("time_window") or {},
+                    "severity": message.get("severity"),
+                },
+            )
     except WebSocketDisconnect:
+        hub.disconnect(websocket)
+    except Exception:
+        logger.exception("websocket connection failed")
         hub.disconnect(websocket)

@@ -29,6 +29,9 @@ export type WsHandlers = {
 
 export class DashboardSocket {
   private socket: WebSocket | null = null
+  private closedByUser = false
+  private attempt = 0
+  private timer: number | null = null
   private readonly handlers: WsHandlers
 
   constructor(handlers: WsHandlers) {
@@ -36,15 +39,25 @@ export class DashboardSocket {
   }
 
   connect(): void {
-    this.disconnect()
+    this.closedByUser = false
+    this.attempt = 0
+    this.open()
+  }
+
+  private open(): void {
+    this.disconnectSocketOnly()
     const socket = new WebSocket(wsUrl())
     this.socket = socket
 
     socket.onopen = () => {
+      this.attempt = 0
       this.handlers.onOpen()
     }
     socket.onclose = () => {
       this.handlers.onClose()
+      if (!this.closedByUser) {
+        this.scheduleReconnect()
+      }
     }
     socket.onerror = () => {
       this.handlers.onError()
@@ -64,6 +77,17 @@ export class DashboardSocket {
     }
   }
 
+  private scheduleReconnect(): void {
+    if (this.timer !== null) {
+      window.clearTimeout(this.timer)
+    }
+    const delay = Math.min(8000, 600 * 2 ** this.attempt)
+    this.attempt += 1
+    this.timer = window.setTimeout(() => {
+      this.open()
+    }, delay)
+  }
+
   sendFilter(criteria: WsFilterCriteria): void {
     if (this.socket === null || this.socket.readyState !== WebSocket.OPEN) {
       return
@@ -72,6 +96,15 @@ export class DashboardSocket {
   }
 
   disconnect(): void {
+    this.closedByUser = true
+    if (this.timer !== null) {
+      window.clearTimeout(this.timer)
+      this.timer = null
+    }
+    this.disconnectSocketOnly()
+  }
+
+  private disconnectSocketOnly(): void {
     if (this.socket !== null) {
       this.socket.onopen = null
       this.socket.onclose = null

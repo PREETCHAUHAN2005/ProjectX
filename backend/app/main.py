@@ -1,6 +1,10 @@
-import asyncio
-import logging
 from contextlib import asynccontextmanager
+
+from app.core.paths import ensure_repo_on_path
+
+ensure_repo_on_path()
+
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,49 +13,36 @@ from app.api.v1 import api_v1
 from app.core.config import settings
 from app.core.exceptions import install_exception_handlers
 from app.schemas.contracts import HealthResponse
-from app.ws.gateway import router as ws_router
+from app.services.live import get_runtime
+from app.stores.posts import get_post_store
+from app.ws.gateway import hub, router as ws_router
 
-logger = logging.getLogger(__name__)
-
-
-async def _demo_ticker(stop: asyncio.Event) -> None:
-    from app.services.demo_seed import pop_ticker_document
-    from app.services.ingest import persist_and_emit
-
-    delay = max(float(settings.demo_tick_seconds), 0.5)
-    while True:
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=delay)
-            return
-        except asyncio.TimeoutError:
-            document = pop_ticker_document()
-            if document is None:
-                continue
-            try:
-                await persist_and_emit(document)
-            except Exception:
-                logger.exception("Demo ticker failed to persist a comment")
+logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    stop = asyncio.Event()
-    tick_task: asyncio.Task[None] | None = None
-    if settings.demo_seed:
-        from app.services.demo_seed import load_demo_seed
-        from app.services.ingest import persist_to_stores
+    import asyncio
 
-        load_demo_seed(persist=lambda document: persist_to_stores(document))
-        tick_task = asyncio.create_task(_demo_ticker(stop))
-    yield
-    stop.set()
-    if tick_task is not None:
-        await tick_task
+    runtime = get_runtime()
+    loop_task = None
+    if settings.demo_mode and settings.app_env != "test":
+        await runtime.seed_if_empty()
+        loop_task = asyncio.create_task(runtime.run_loop())
+    try:
+        yield
+    finally:
+        if loop_task is not None:
+            loop_task.cancel()
+            try:
+                await loop_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(
     title="ProjectX Social Intelligence API",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -71,4 +62,12 @@ app.include_router(ws_router)
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """IMPLEMENTATION extra — not a confirmed product API."""
-    return HealthResponse(status="ok")
+    runtime = get_runtime()
+    return HealthResponse(
+        status="ok",
+        posts=get_post_store().count(),
+        emotion_backend=settings.emotion_backend,
+        demo_mode=settings.demo_mode,
+        ingest_source=runtime.ingest_source,
+        websocket_clients=hub.client_count,
+    )

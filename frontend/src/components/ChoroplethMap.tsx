@@ -3,12 +3,14 @@ import { useChartColors } from '../lib/theme'
 
 const LAYOUT: Record<string, { x: number; y: number; r: number }> = {
   India: { x: 68, y: 48, r: 18 },
+  Bangladesh: { x: 72, y: 46, r: 8 },
   'United States': { x: 22, y: 38, r: 14 },
   'United Kingdom': { x: 46, y: 32, r: 8 },
   UAE: { x: 58, y: 44, r: 7 },
-  Bangladesh: { x: 72, y: 46, r: 8 },
   Singapore: { x: 76, y: 56, r: 6 },
   Germany: { x: 49, y: 34, r: 8 },
+  Nepal: { x: 70, y: 42, r: 6 },
+  'Sri Lanka': { x: 67, y: 58, r: 6 },
 }
 
 export function ChoroplethMap({ slices }: { slices: DemographicSlice[] }) {

@@ -3,8 +3,11 @@ import {
   getDemographics,
   getHealth,
   getNetworkGraph,
+  getRecentFeed,
   getTimeline,
   getTrending,
+  runIngest,
+  toIsoParam,
 } from '../api/client'
 import { DashboardSocket } from '../api/wsClient'
 import { isGraphDeltaPayload, isNewPostPayload, isTrendSpikePayload } from './guards'
@@ -30,6 +33,7 @@ import { hoursAgo } from './format'
 import type {
   DemographicsResponse,
   GraphDeltaPayload,
+  HealthResponse,
   NetworkGraphResponse,
   NewPostPayload,
   TimelineResponse,
@@ -37,7 +41,7 @@ import type {
   WsEnvelope,
 } from '../types/contracts'
 
-export type DataMode = 'live' | 'prototype'
+export type DataMode = 'live' | 'prototype' | 'offline'
 
 function seedPrototype(): {
   timeline: LoadState<TimelineResponse>
@@ -86,19 +90,8 @@ function mergeGraph(
   return { nodes, links }
 }
 
-function applyPrototypeWidgets(
-  setTimeline: (value: LoadState<TimelineResponse>) => void,
-  setGraph: (value: LoadState<NetworkGraphResponse>) => void,
-  setDemographics: (value: LoadState<DemographicsResponse>) => void,
-  setTrending: (value: LoadState<TrendingResponse>) => void,
-  setFeed: (value: NewPostPayload[]) => void,
-) {
-  const proto = seedPrototype()
-  setTimeline(proto.timeline)
-  setGraph(proto.graph)
-  setDemographics(proto.demographics)
-  setTrending(proto.trending)
-  setFeed(prototypeFeed())
+function failed<T>(message: string): LoadState<T> {
+  return { status: 'error', data: null, error: message }
 }
 
 export function useDashboard() {
@@ -107,11 +100,14 @@ export function useDashboard() {
   const [to, setTo] = useState(() => hoursAgo(0))
   const [severity, setSeverity] = useState('')
   const [preferPrototype, setPreferPrototype] = useState(false)
-  const [dataMode, setDataMode] = useState<DataMode>('prototype')
+  const [dataMode, setDataMode] = useState<DataMode>('live')
   const [apiStatus, setApiStatus] = useState('checking')
   const [wsStatus, setWsStatus] = useState('disconnected')
+  const [health, setHealth] = useState<HealthResponse | null>(null)
   const [feed, setFeed] = useState<NewPostPayload[]>([])
   const [spikeNotice, setSpikeNotice] = useState<string | null>(null)
+  const [fetchNotice, setFetchNotice] = useState<string | null>(null)
+  const [fetching, setFetching] = useState(false)
   const [timeline, setTimeline] = useState<LoadState<TimelineResponse>>(initialLoad)
   const [graph, setGraph] = useState<LoadState<NetworkGraphResponse>>(initialLoad)
   const [demographics, setDemographics] =
@@ -119,6 +115,53 @@ export function useDashboard() {
   const [trending, setTrending] = useState<LoadState<TrendingResponse>>(initialLoad)
   const tick = useRef(0)
   const liveFeedReset = useRef(false)
+  const refreshTimer = useRef<number | null>(null)
+
+  const applyPrototype = useCallback(() => {
+    const proto = seedPrototype()
+    setTimeline(proto.timeline)
+    setGraph(proto.graph)
+    setDemographics(proto.demographics)
+    setTrending(proto.trending)
+    setDataMode('prototype')
+    setApiStatus('preview')
+    setFeed(prototypeFeed())
+  }, [])
+
+  const refreshAnalytics = useCallback(async (): Promise<void> => {
+    const query = {
+      topic: topic || undefined,
+      from: toIsoParam(from),
+      to: toIsoParam(to),
+      severity: severity || undefined,
+    }
+    const [timelineData, graphData, demoData, trendingData] = await Promise.all([
+      getTimeline({ ...query, bucket: 'hour' }),
+      getNetworkGraph({ topic: query.topic, severity: query.severity }),
+      getDemographics(query.topic, query.severity),
+      getTrending(),
+    ])
+    setTimeline(fromResult(timelineData, timelineData.buckets.length === 0))
+    setGraph(fromResult(graphData, graphData.nodes.length === 0))
+    setDemographics(
+      fromResult(
+        demoData,
+        demoData.country.length === 0 &&
+          demoData.language.length === 0 &&
+          demoData.profession.length === 0,
+      ),
+    )
+    setTrending(fromResult(trendingData, trendingData.topics.length === 0))
+  }, [from, severity, to, topic])
+
+  const scheduleAnalyticsRefresh = useCallback(() => {
+    if (refreshTimer.current !== null) {
+      window.clearTimeout(refreshTimer.current)
+    }
+    refreshTimer.current = window.setTimeout(() => {
+      void refreshAnalytics().catch(() => undefined)
+    }, 2000)
+  }, [refreshAnalytics])
 
   const load = useCallback(async (): Promise<void> => {
     setTimeline(initialLoad())
@@ -127,62 +170,71 @@ export function useDashboard() {
     setTrending(initialLoad())
 
     if (preferPrototype) {
-      applyPrototypeWidgets(setTimeline, setGraph, setDemographics, setTrending, setFeed)
-      setDataMode('prototype')
-      setApiStatus('preview')
+      applyPrototype()
       return
     }
 
     try {
-      const health = await getHealth()
-      setApiStatus(health.status)
+      const nextHealth = await getHealth()
+      setHealth(nextHealth)
+      setApiStatus(nextHealth.status)
     } catch {
-      applyPrototypeWidgets(setTimeline, setGraph, setDemographics, setTrending, setFeed)
-      setDataMode('prototype')
+      setHealth(null)
+      setDataMode('offline')
       setApiStatus('unreachable')
+      setFeed([])
+      const message = 'API unreachable. Start the local backend on port 8000.'
+      setTimeline(failed(message))
+      setGraph(failed(message))
+      setDemographics(failed(message))
+      setTrending(failed(message))
       return
     }
 
-    const query = {
-      topic: topic || undefined,
-      from: from || undefined,
-      to: to || undefined,
-      severity: severity || undefined,
-    }
-
     try {
-      const [timelineData, graphData, demoData, trendingData] = await Promise.all([
-        getTimeline({ ...query, bucket: 'hour' }),
-        getNetworkGraph({ topic: query.topic, severity: query.severity }),
-        getDemographics(query.topic, query.severity),
-        getTrending(),
-      ])
-      setTimeline(fromResult(timelineData, timelineData.buckets.length === 0))
-      setGraph(fromResult(graphData, graphData.nodes.length === 0))
-      setDemographics(
-        fromResult(
-          demoData,
-          demoData.country.length === 0 &&
-            demoData.language.length === 0 &&
-            demoData.profession.length === 0,
-        ),
-      )
-      setTrending(fromResult(trendingData, trendingData.topics.length === 0))
+      await refreshAnalytics()
+      const recent = await getRecentFeed(40)
+      setFeed(recent.posts)
       setDataMode('live')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Request failed'
-      setTimeline({ status: 'error', data: null, error: message })
-      setGraph({ status: 'error', data: null, error: message })
-      setDemographics({ status: 'error', data: null, error: message })
-      setTrending({ status: 'error', data: null, error: message })
-      setDataMode('live')
+    } catch {
+      const message = 'Analytics request failed'
+      setTimeline(failed(message))
+      setGraph(failed(message))
+      setDemographics(failed(message))
+      setTrending(failed(message))
+      setDataMode('offline')
       setApiStatus('error')
     }
-  }, [from, preferPrototype, severity, to, topic])
+  }, [applyPrototype, preferPrototype, refreshAnalytics])
+
+  const fetchPosts = useCallback(async (): Promise<void> => {
+    setFetching(true)
+    setFetchNotice(null)
+    try {
+      const result = await runIngest(topic || undefined, 12)
+      setFetchNotice(`Ingested ${result.accepted} posts via ${result.source}`)
+      await refreshAnalytics()
+      const recent = await getRecentFeed(40)
+      setFeed(recent.posts)
+      setDataMode('live')
+    } catch {
+      setFetchNotice('Ingest failed — backend may be down')
+    } finally {
+      setFetching(false)
+    }
+  }, [refreshAnalytics, topic])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimer.current !== null) {
+        window.clearTimeout(refreshTimer.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (dataMode === 'prototype') {
@@ -211,6 +263,11 @@ export function useDashboard() {
       }
     }
 
+    if (dataMode === 'offline') {
+      setWsStatus('disconnected')
+      return
+    }
+
     const socket = new DashboardSocket({
       onOpen: () => {
         setWsStatus('connected')
@@ -219,8 +276,8 @@ export function useDashboard() {
           type: 'filter',
           topic: topic || undefined,
           time_window: {
-            from: from || undefined,
-            to: to || undefined,
+            from: toIsoParam(from),
+            to: toIsoParam(to),
           },
           severity: severity || undefined,
         })
@@ -234,10 +291,10 @@ export function useDashboard() {
       onMalformed: () => undefined,
       onEvent: (envelope: WsEnvelope) => {
         if (envelope.event === 'event:new_post') {
-          if (!isNewPostPayload(envelope.payload)) {
+          const incoming = envelope.payload
+          if (!isNewPostPayload(incoming)) {
             return
           }
-          const incoming = envelope.payload
           setFeed((current) => {
             const next = liveFeedReset.current ? [] : current
             liveFeedReset.current = false
@@ -250,26 +307,30 @@ export function useDashboard() {
             }
             return [incoming, ...next].slice(0, 50)
           })
+          scheduleAnalyticsRefresh()
           return
         }
         if (envelope.event === 'event:trend_spike') {
-          if (!isTrendSpikePayload(envelope.payload)) {
+          const payload = envelope.payload
+          if (!isTrendSpikePayload(payload)) {
             return
           }
-          setSpikeNotice(
-            `${envelope.payload.topic_name} · velocity ${envelope.payload.velocity.toFixed(1)}`,
-          )
+          setSpikeNotice(`${payload.topic_name} · velocity ${payload.velocity.toFixed(1)}`)
+          scheduleAnalyticsRefresh()
           return
         }
-        if (envelope.event === 'event:graph_delta' && isGraphDeltaPayload(envelope.payload)) {
-          const delta = envelope.payload
+        if (envelope.event === 'event:graph_delta') {
+          const payload = envelope.payload
+          if (!isGraphDeltaPayload(payload)) {
+            return
+          }
           setGraph((current) => {
             if (current.data === null) {
-              return fromResult(delta, delta.nodes.length === 0)
+              return fromResult(payload, payload.nodes.length === 0)
             }
             return {
               status: 'ready',
-              data: mergeGraph(current.data, delta),
+              data: mergeGraph(current.data, payload),
               error: null,
             }
           })
@@ -281,7 +342,7 @@ export function useDashboard() {
     return () => {
       socket.disconnect()
     }
-  }, [dataMode, from, severity, to, topic])
+  }, [dataMode, from, scheduleAnalyticsRefresh, severity, to, topic])
 
   const emotions = useMemo(() => emotionMixFromTimeline(timeline.data), [timeline.data])
   const thread = useMemo(() => featuredThread(feed), [feed])
@@ -309,8 +370,12 @@ export function useDashboard() {
     dataMode,
     apiStatus,
     wsStatus,
+    health,
     feed,
     spikeNotice,
+    fetchNotice,
+    fetching,
+    fetchPosts,
     clearSpike: () => {
       setSpikeNotice(null)
     },

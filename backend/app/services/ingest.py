@@ -76,6 +76,7 @@ def document_to_new_post(document: dict[str, Any]) -> NewPostPayload:
         in_reply_to=analytics.get("in_reply_to"),
         polarity=polarity,
         emotions=analytics.get("emotions") or [],
+        analytics=analytics or None,
     )
 
 

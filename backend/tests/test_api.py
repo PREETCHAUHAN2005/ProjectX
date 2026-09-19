@@ -7,7 +7,10 @@ def test_health() -> None:
     client = TestClient(app)
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert "posts" in body
+    assert "emotion_backend" in body
 
 
 def test_timeline_empty() -> None:

@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_ts(value: str) -> datetime | None:
-    text = str(value or "").replace("Z", "+00:00")
+    text = (value or "").strip()
     if not text:
         return None
     try:
-        parsed = datetime.fromisoformat(text)
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
     if parsed.tzinfo is None:
@@ -101,6 +101,14 @@ class MemoryPostStore:
         rows.sort(key=lambda row: str(row.get("timestamp") or ""))
         return rows
 
+    def list_recent(self, limit: int = 50) -> list[dict[str, Any]]:
+        rows = list(self._docs.values())
+        rows.sort(key=lambda row: str(row.get("timestamp") or ""), reverse=True)
+        return rows[: max(0, limit)]
+
+    def count(self) -> int:
+        return len(self._docs)
+
     def clear(self) -> None:
         self._docs.clear()
 
@@ -156,8 +164,25 @@ class MongoPostStore:
         if severity:
             query["analytics.severity"] = severity
         rows = list(self._col().find(query, {"_id": 0}))
-        rows.sort(key=lambda row: str(row.get("timestamp") or ""))
-        return rows
+        return [
+            row
+            for row in rows
+            if _matches_filters(
+                row,
+                topic=topic,
+                from_ts=from_ts,
+                to_ts=to_ts,
+                severity=severity,
+            )
+        ]
+
+    def list_recent(self, limit: int = 50) -> list[dict[str, Any]]:
+        return list(
+            self._col().find({}, {"_id": 0}).sort("timestamp", -1).limit(max(0, limit))
+        )
+
+    def count(self) -> int:
+        return int(self._col().count_documents({}))
 
 
 _store: MemoryPostStore | MongoPostStore | None = None

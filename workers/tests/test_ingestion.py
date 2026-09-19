@@ -59,3 +59,22 @@ def test_x_item_mapper() -> None:
     assert post is not None
     assert post.platform == "x"
     assert post.external_id == "t1"
+
+
+def test_official_api_item_mapper() -> None:
+    from workers.ingestion.x_adapter import from_official_api_item
+
+    post = from_official_api_item(
+        {
+            "id": "99",
+            "author_id": "5",
+            "text": "official post",
+            "created_at": "2026-08-24T00:00:00Z",
+            "lang": "en",
+            "public_metrics": {"like_count": 2, "retweet_count": 1},
+        },
+        {"5": {"username": "bob", "description": "analyst"}},
+    )
+    assert post is not None
+    assert post.author.handle == "bob"
+    assert post.content.raw_text == "official post"
