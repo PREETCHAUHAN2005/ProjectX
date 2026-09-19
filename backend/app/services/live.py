@@ -171,8 +171,6 @@ class LiveRuntime:
         for row in seed_raw_posts():
             if await self.ingest_raw_dict(row, emit=False):
                 accepted += 1
-        for payload in reversed(recent_feed_payloads(12)):
-            hub.record(WsEnvelope(event="event:new_post", payload=payload))
         self.ingest_source = "replay"
         logger.info("Demo seed ingested %s analyzed posts", accepted)
         return accepted

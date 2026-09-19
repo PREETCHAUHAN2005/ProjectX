@@ -6,14 +6,15 @@ Filter criteria JSON is not fully specified; this accepts a conservative subset.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from collections import deque
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.core.config import settings
 from app.schemas.contracts import GraphDeltaPayload, NewPostPayload, TrendSpikePayload, WsEnvelope
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,12 @@ def _parse_ts(value: str) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _as_envelope_dict(envelope: dict[str, Any] | WsEnvelope) -> dict[str, Any]:
+    if isinstance(envelope, WsEnvelope):
+        return envelope.model_dump()
+    return envelope
 
 
 def _matches_filters(envelope: dict[str, Any], filters: dict[str, Any]) -> bool:
@@ -71,7 +78,6 @@ def _matches_filters(envelope: dict[str, Any], filters: dict[str, Any]) -> bool:
 class ConnectionHub:
     def __init__(self) -> None:
         self._clients: dict[WebSocket, dict[str, Any]] = {}
-        self._replay: deque[dict[str, Any]] = deque(maxlen=REPLAY_LIMIT)
 
     @property
     def client_count(self) -> int:
@@ -80,9 +86,6 @@ class ConnectionHub:
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
         self._clients[websocket] = {}
-        for envelope in list(self._replay):
-            if _matches_filters(envelope, self._clients[websocket]):
-                await websocket.send_text(json.dumps(envelope))
 
     def disconnect(self, websocket: WebSocket) -> None:
         self._clients.pop(websocket, None)
@@ -91,8 +94,8 @@ class ConnectionHub:
         if websocket in self._clients:
             self._clients[websocket] = filters
 
-    async def broadcast(self, envelope: dict[str, Any]) -> None:
-        self._replay.append(envelope)
+    async def broadcast(self, envelope: dict[str, Any] | WsEnvelope) -> None:
+        envelope = _as_envelope_dict(envelope)
         stale: list[WebSocket] = []
         for websocket, filters in self._clients.items():
             if not _matches_filters(envelope, filters):
@@ -105,16 +108,40 @@ class ConnectionHub:
         for websocket in stale:
             self.disconnect(websocket)
 
-    def record(self, envelope: dict[str, Any] | WsEnvelope) -> None:
-        payload = envelope.model_dump() if isinstance(envelope, WsEnvelope) else envelope
-        self._replay.append(payload)
-
     def reset_for_tests(self) -> None:
         self._clients.clear()
-        self._replay.clear()
 
 
 hub = ConnectionHub()
+
+
+async def _replay_recent(websocket: WebSocket) -> None:
+    from app.services.ingest import document_to_new_post
+    from app.stores.posts import get_post_store
+
+    posts = get_post_store().list_posts()
+    roots = [
+        row
+        for row in posts
+        if str((row.get("analytics") or {}).get("thread_role") or "post") != "comment"
+    ]
+    comments = [
+        row
+        for row in posts
+        if str((row.get("analytics") or {}).get("thread_role") or "post") == "comment"
+    ]
+    comment_budget = max(0, REPLAY_LIMIT - len(roots))
+    selected = [*roots, *comments[-comment_budget:]]
+    selected.sort(key=lambda row: str(row.get("timestamp") or ""))
+    filters = hub._clients.get(websocket) or {}
+    for document in selected:
+        try:
+            payload = document_to_new_post(document).model_dump(exclude_none=True)
+            envelope = {"event": "event:new_post", "payload": payload}
+            if _matches_filters(envelope, filters):
+                await websocket.send_text(json.dumps(envelope))
+        except Exception:
+            logger.exception("Failed replaying seeded post on WebSocket connect")
 
 
 def _validate_event(event: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -136,6 +163,9 @@ async def emit(event: str, payload: dict[str, Any]) -> None:
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await hub.connect(websocket)
+    if settings.app_env != "test":
+        await asyncio.sleep(0.25)
+    await _replay_recent(websocket)
     try:
         while True:
             raw = await websocket.receive_text()
